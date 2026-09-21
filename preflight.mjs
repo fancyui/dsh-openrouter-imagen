@@ -11,6 +11,7 @@
  * check that the proxy agent honours no_proxy).
  */
 import { mkdtemp, readdir, stat } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -450,6 +451,36 @@ check(
 check(
   'the description carries the professional prompt structure',
   tool.description.includes('镜头与构图') && tool.description.includes('光线') && tool.description.includes('商业摄影'),
+  '',
+)
+check(
+  'the description makes the user panel the default and forbids picking parameters for him',
+  tool.description.includes('参数默认由用户的面板决定') &&
+    tool.description.includes('一律省略') &&
+    tool.description.includes('不要替用户挑参数'),
+  tool.description.slice(tool.description.indexOf('参数默认')),
+)
+// The override parameters stay available for the cases the user asks for by
+// name, but each one has to say "omit unless he asked" — that wording is the
+// contract that keeps the model from quietly re-deciding the panel's values.
+const hostSource = readFileSync(join(ROOT, 'lib', 'index.js'), 'utf8')
+const OVERRIDES = ['model', 'count', 'resolution', 'aspect_ratio', 'quality', 'background', 'seed']
+const undisciplined = OVERRIDES.filter((key) => {
+  const declaration = hostSource
+    .split('\n')
+    .find((line) => line.trimStart().startsWith(`${key}: {`) && line.includes('description:'))
+  const text = declaration ?? ''
+  return !text.includes('Omit unless') && !text.includes('Pass it only when')
+})
+check(
+  'every override parameter tells the model to omit it unless the user asked',
+  undisciplined.length === 0,
+  undisciplined.length === 0 ? `${OVERRIDES.length} parameters` : `missing on: ${undisciplined.join(', ')}`,
+)
+check(
+  '取景 alone is not a licence to pick a ratio',
+  tool.parameters?.aspect_ratio?.description?.includes('全身照') ||
+    hostSource.includes('主体取景（例如「全身照」）不算'),
   '',
 )
 
