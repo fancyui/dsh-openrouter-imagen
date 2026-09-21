@@ -244,33 +244,33 @@ const mod = await import(pathToFileURL(join(ROOT, 'lib', 'index.js')).href)
 mod.apply(ctx, {})
 
 const route = registered.routes[0]
-check('model tool registered', registered.tools.some((tool) => tool.name === 'openrouter_generate_image'))
+check('model tool registered', registered.tools.some((tool) => tool.name === 'openrouter_generate_imagen'))
 check('api route registered', route !== undefined, registered.routes.map((r) => `${r.kind} ${r.path}`).join(', '))
 
 /* config round-trip */
-const before = await call(route, 'GET', '/openrouter-image/api/config')
+const before = await call(route, 'GET', '/openrouter-imagen/api/config')
 check('GET /config hides the key', before.json.hasKey === false && before.json.config.apiKey === undefined)
 
 /* the trust fence the shipped routes use: a foreign origin must not be able to
  * spend the key through /generate, nor rewrite the settings through /config */
 const imagesBefore = captured.requests.filter((entry) => entry.url === '/images').length
 connection.rejection = 403
-const fenced = await call(route, 'GET', '/openrouter-image/api/config')
+const fenced = await call(route, 'GET', '/openrouter-imagen/api/config')
 check('a foreign origin is fenced out of the api route', fenced.status === 403 && fenced.json.ok === false, JSON.stringify(fenced.json))
-const fencedGenerate = await call(route, 'POST', '/openrouter-image/api/generate', { prompt: 'not mine' })
+const fencedGenerate = await call(route, 'POST', '/openrouter-imagen/api/generate', { prompt: 'not mine' })
 check(
   'a fenced request never reaches the provider',
   fencedGenerate.status === 403 && captured.requests.filter((entry) => entry.url === '/images').length === imagesBefore,
   String(fencedGenerate.status),
 )
 connection.rejection = 401
-const unauthenticated = await call(route, 'POST', '/openrouter-image/api/config', { model: 'evil/model' })
+const unauthenticated = await call(route, 'POST', '/openrouter-imagen/api/config', { model: 'evil/model' })
 check('an unauthenticated browser is refused with 401', unauthenticated.status === 401, String(unauthenticated.status))
 connection.rejection = undefined
-const trusted = await call(route, 'GET', '/openrouter-image/api/config')
+const trusted = await call(route, 'GET', '/openrouter-imagen/api/config')
 check('a trusted browser still reads the config', trusted.status === 200 && trusted.json.ok === true, String(trusted.status))
 
-const saved = await call(route, 'POST', '/openrouter-image/api/config', {
+const saved = await call(route, 'POST', '/openrouter-imagen/api/config', {
   apiKey: 'sk-preflight',
   model: 'openai/gpt-image-1',
   count: 3,
@@ -287,16 +287,16 @@ const saved = await call(route, 'POST', '/openrouter-image/api/config', {
 check('POST /config persists', saved.json.ok === true && saved.json.hasKey === true && saved.json.config.count === 3, JSON.stringify(saved.json.config))
 
 /* staged reference from the composer */
-const staged = await call(route, 'POST', '/openrouter-image/api/reference', {
+const staged = await call(route, 'POST', '/openrouter-imagen/api/reference', {
   references: [{ mediaType: 'image/png', data: PNG_B64 }],
 })
 check('POST /reference stages one image', staged.json.ok === true && staged.json.count === 1, JSON.stringify(staged.json))
 
-const listed = await call(route, 'GET', '/openrouter-image/api/reference')
+const listed = await call(route, 'GET', '/openrouter-imagen/api/reference')
 check('GET /reference reports metadata only', listed.json.count === 1 && listed.json.references[0].dataUrl === undefined, JSON.stringify(listed.json))
 
 /* the generation itself, against the mock */
-const generated = await call(route, 'POST', '/openrouter-image/api/generate', { prompt: 'a probe image' })
+const generated = await call(route, 'POST', '/openrouter-imagen/api/generate', { prompt: 'a probe image' })
 check('POST /generate succeeds', generated.json.ok === true, generated.json.error ?? '')
 // The browser response deliberately omits the durable attachment ref; the
 // presence of a host file path is what proves the attachment branch ran.
@@ -327,7 +327,7 @@ check(
   JSON.stringify(body.input_references?.map((r) => String(r?.image_url?.url).slice(0, 32))),
 )
 
-const after = await call(route, 'GET', '/openrouter-image/api/reference')
+const after = await call(route, 'GET', '/openrouter-imagen/api/reference')
 check('staged reference is consumed on success', after.json.count === 0, String(after.json.count))
 
 /* the seed: a fixed box is sent as-is, an empty box draws one and reports it */
@@ -336,8 +336,8 @@ check(
   generated.json.seed === 42 && generated.json.seedRandom === false,
   JSON.stringify({ seed: generated.json.seed, seedRandom: generated.json.seedRandom }),
 )
-await call(route, 'POST', '/openrouter-image/api/config', { seed: '' })
-const drawn = await call(route, 'POST', '/openrouter-image/api/generate', { prompt: 'random seed probe' })
+await call(route, 'POST', '/openrouter-imagen/api/config', { seed: '' })
+const drawn = await call(route, 'POST', '/openrouter-imagen/api/generate', { prompt: 'random seed probe' })
 const drawnBody = captured.requests.filter((entry) => entry.url === '/images' && entry.method === 'POST').pop()?.body ?? {}
 check(
   'an empty seed box draws a seed and reports it back',
@@ -347,13 +347,13 @@ check(
     drawn.json.seedRandom === true,
   JSON.stringify({ sent: drawnBody.seed, reported: drawn.json.seed, seedRandom: drawn.json.seedRandom }),
 )
-await call(route, 'POST', '/openrouter-image/api/config', { seed: '42' })
+await call(route, 'POST', '/openrouter-imagen/api/config', { seed: '42' })
 
 /* the remaining endpoints */
-const keyTest = await call(route, 'GET', '/openrouter-image/api/test')
+const keyTest = await call(route, 'GET', '/openrouter-imagen/api/test')
 check('GET /test reports the key limits', keyTest.json.ok === true && keyTest.json.report.includes('preflight-key'), keyTest.json.report ?? keyTest.json.error)
 
-const models = await call(route, 'GET', '/openrouter-image/api/models')
+const models = await call(route, 'GET', '/openrouter-imagen/api/models')
 check('GET /models sorts the catalog', models.json.count === 2 && models.json.models[0].id === 'a/model', JSON.stringify(models.json.models))
 
 /* the tool's own render path */
@@ -420,7 +420,7 @@ check(
 )
 // The tool's declared spelling is snake_case (a camelCase argument is refused
 // as undeclared, asserted below); the JSON route keeps accepting camelCase.
-const camelRoute = await call(route, 'POST', '/openrouter-image/api/generate', { prompt: 'camel probe', aspectRatio: '9:16' })
+const camelRoute = await call(route, 'POST', '/openrouter-imagen/api/generate', { prompt: 'camel probe', aspectRatio: '9:16' })
 const camelBody = captured.requests.filter((entry) => entry.url === '/images' && entry.method === 'POST').pop()?.body ?? {}
 check(
   'the camelCase spelling still reaches the wire through the JSON route',
@@ -499,7 +499,7 @@ const insideRead = await tool.execute(
 check('reference_files still reads inside the session workspace', insideRead.ok === true, insideRead.error ?? '')
 
 /* emptying 保存目录 opts out of project storage without failing the call */
-const emptied = await call(route, 'POST', '/openrouter-image/api/config', { saveDir: '' })
+const emptied = await call(route, 'POST', '/openrouter-imagen/api/config', { saveDir: '' })
 check('保存目录 can be emptied through the config route', emptied.json.ok === true && emptied.json.config.saveDir === '', JSON.stringify(emptied.json.config))
 const optedOut = await tool.execute({ prompt: 'nowhere in particular', reference_images: [] }, exec)
 check(
@@ -507,21 +507,21 @@ check(
   optedOut.ok === true && optedOut.outputDir === undefined && String(optedOut.images?.[0]?.filePath).startsWith('C:/mock/'),
   JSON.stringify({ outputDir: optedOut.outputDir, filePath: optedOut.images?.[0]?.filePath }),
 )
-await call(route, 'POST', '/openrouter-image/api/config', { saveDir: 'generated-images' })
+await call(route, 'POST', '/openrouter-imagen/api/config', { saveDir: 'generated-images' })
 
 /* `extraJson` is a pass-through hatch, not a way to swap the model or prompt */
-await call(route, 'POST', '/openrouter-image/api/config', { extraJson: '{"model":"evil/model"}' })
-const overridden = await call(route, 'POST', '/openrouter-image/api/generate', { prompt: 'probe' })
+await call(route, 'POST', '/openrouter-imagen/api/config', { extraJson: '{"model":"evil/model"}' })
+const overridden = await call(route, 'POST', '/openrouter-imagen/api/generate', { prompt: 'probe' })
 check(
   '附加参数 cannot silently override the model',
   overridden.json.ok === false && String(overridden.json.error).includes('不能覆盖'),
   overridden.json.error ?? '',
 )
-await call(route, 'POST', '/openrouter-image/api/config', { extraJson: '{"negative_prompt":"模糊"}' })
+await call(route, 'POST', '/openrouter-imagen/api/config', { extraJson: '{"negative_prompt":"模糊"}' })
 
 /* a keyless call still fails before any network work */
 baseConfig.apiKey = ''
-const keyless = await call(route, 'POST', '/openrouter-image/api/generate', { prompt: 'x' })
+const keyless = await call(route, 'POST', '/openrouter-imagen/api/generate', { prompt: 'x' })
 check('keyless generate gives the guidance error', keyless.json.ok === false && keyless.json.error.includes('API Key'), keyless.json.error)
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`)

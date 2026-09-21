@@ -232,7 +232,7 @@ const dir = join(ROOT, 'generated-images')
 const settled = {
   kind: 'tool-call',
   isError: false,
-  call: { name: 'openrouter_generate_image', argsRaw: JSON.stringify({ prompt: '把这张照片重绘成油画风格' }) },
+  call: { name: 'openrouter_generate_imagen', argsRaw: JSON.stringify({ prompt: '把这张照片重绘成油画风格' }) },
   content: [
     {
       type: 'text',

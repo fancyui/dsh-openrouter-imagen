@@ -13,7 +13,7 @@
 # Manual mount (equivalent, if you are not using the CLI): add
 #
 #   - insert:
-#       - id: openrouter-image
+#       - id: openrouter-imagen
 #         name: 'dsh-openrouter-imagen'
 #
 # to the profile's own cordis.patch.yml. Do not do both — two mounts register
@@ -23,7 +23,7 @@
 # user layer (Settings > 图像生成, persisted in settings.yaml) resolves above
 # it, so editing this file only changes the defaults a user has not overridden.
 - insert:
-    - id: openrouter-image
+    - id: openrouter-imagen
       name: 'dsh-openrouter-imagen'
       config:
         model: google/gemini-2.5-flash-image

@@ -4,7 +4,7 @@
 
 一个**可安装、常驻**的 DSH 插件:用 OpenRouter 的 Image API 生成图片,配置持久保存,重启后依然有效。
 
-- **Host 半边**:注册 `openrouter-image` 设置命名空间、`openrouter_generate_image` 工具、以及 `/openrouter-image/api/*` 同源 JSON 路由。
+- **Host 半边**:注册 `openrouter-imagen` 设置命名空间、`openrouter_generate_imagen` 工具、以及 `/openrouter-imagen/api/*` 同源 JSON 路由。
 - **Client 半边**:注册三个槽位 —— **设置 → 图像生成** 的配置页、输入框上方的参数条(`conversation.input.dock` 加 `conversation.input.right` 的「图像」按钮)、以及本工具在对话里的卡片(`tool.call.toolview`,把生成的图直接画出来)。
 
 ## 目录结构
@@ -12,7 +12,7 @@
 ```
 .
 ├── package.json            # main / exports["./client"] / dsh.bundle.patch / dsh.client
-├── cordis.patch.yml        # bundle 层:插入 openrouter-image 插件行
+├── cordis.patch.yml        # bundle 层:插入 openrouter-imagen 插件行
 ├── LICENSE
 ├── lib/
 │   ├── index.js            # Host 半边(Cordis 插件)
@@ -76,7 +76,7 @@ dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-
 
    ```yaml
    - insert:
-       - id: openrouter-image
+       - id: openrouter-imagen
          name: 'dsh-openrouter-imagen'
          config:
            model: google/gemini-2.5-flash-image
@@ -122,7 +122,7 @@ peer 之所以标 `optional: true`:公共 registry 上 `@deepseek-ai/dsh-client-
 1. 打开 **设置 → 图像生成**。这一页只剩**长期配置**:密钥、模型、Provider 排序、保存目录。逐次调整的参数在输入框上方(见下一节),**保存配置按钮在本页最下方**。
 2. 填 **API Key**(在 openrouter.ai/keys 创建)→ 点 **保存配置**。Key 以 `role('secret')` 存进设置文件,服务端从不回传,输入框是只写的(留空 = 不修改)。
 3. 点 **测试 Key** 验证(打 `/api/v1/key`,显示额度与用量),点 **拉取模型列表** 从 `/api/v1/images/models` 选模型。
-4. 直接在对话里让 AI 生成 —— 模型会调用 `openrouter_generate_image`,那次调用的卡片会把图画出来,并给出**保存目录的打开链接**。
+4. 直接在对话里让 AI 生成 —— 模型会调用 `openrouter_generate_imagen`,那次调用的卡片会把图画出来,并给出**保存目录的打开链接**。
 
 ### 生成的文件存到哪
 
@@ -156,7 +156,7 @@ peer 之所以标 `optional: true`:公共 registry 上 `@deepseek-ai/dsh-client-
 
 ### 对话里的图片卡片
 
-`tool.call.toolview` 是按工具名分发的键控槽位,插件为 `openrouter_generate_image` 注册了自己的卡片(`GeneratedImagesCard`):
+`tool.call.toolview` 是按工具名分发的键控槽位,插件为 `openrouter_generate_imagen` 注册了自己的卡片(`GeneratedImagesCard`):
 
 - 从 `block.content` 里取出 `{ type: 'image', attachment }` 块,再用 owner 传下来的 **`loadImage`**(`MessageImageLoader`,按 Session 授权)换到可显示的 URL —— 插件不直接碰 attachment 存储。
 - **不注册这张卡片时**,没有专属 view 的工具会落到通用行,图片块被压平成文本 —— 这就是"只看到 `文件已存:...`"的原因。
@@ -174,7 +174,7 @@ peer 之所以标 `optional: true`:公共 registry 上 `@deepseek-ai/dsh-client-
 
 ### 配置项
 
-写入 `~/.dsh/settings.yaml` 的 `openrouter-image` 命名空间(用户层覆盖 composition 的 `base` 层)。
+写入 `~/.dsh/settings.yaml` 的 `openrouter-imagen` 命名空间(用户层覆盖 composition 的 `base` 层)。
 
 其中 **`resolution` / `aspectRatio` / `quality` / `outputFormat` / `count` / `background` / `seed` 已经不在设置页暴露**,请从输入框上方的「图像」面板修改;**`extraJson` 两处 UI 都不再暴露**,只在 `settings.yaml` / composition 的 `base` 层里有效(它仍然会被原样合并进请求体)。两条路径写的是同一个命名空间,下面的表只是说明字段含义:
 
@@ -195,7 +195,7 @@ peer 之所以标 `optional: true`:公共 registry 上 `@deepseek-ai/dsh-client-
 
 ### 工具参数
 
-`openrouter_generate_image(prompt, model?, count?, resolution?, aspect_ratio?, quality?, background?, seed?, reference_images?, reference_files?)`
+`openrouter_generate_imagen(prompt, model?, count?, resolution?, aspect_ratio?, quality?, background?, seed?, reference_images?, reference_files?)`
 
 - `prompt`:必填。**按商业摄影的结构写**:主体与动作 → 环境与道具 → 光线(主光/辅光/轮廓光/色温/时段) → 镜头与构图(焦段/景深/机位/画幅) → 风格与质感 → 画面内文字(逐字给出,注明大小写)。用具体名词与参数,不要写「高级 / 大气 / 好看」这类空词。
 - **带参考图时不要在提示词里描述参考图。** 生图模型自己会读参考图(它是 `input_references`,不是文本);再从文字里复述一遍产品外观(外形、颜色、logo、端子、结构)只会与图像本身冲突、降低还原度。要锁住主体就写一句「保持参考图中的产品外观不变」。注意:`vision-router` 之类的插件会把附图先转成**文字描述**喂给对话模型,那段描述**不应该**被抄进提示词 —— 工具说明里已明确禁止。
@@ -212,7 +212,7 @@ peer 之所以标 `optional: true`:公共 registry 上 `@deepseek-ai/dsh-client-
 
 **出站 HTTP 必须显式走代理。** Node 的全局 `fetch` 完全忽略 `HTTP_PROXY`/`HTTPS_PROXY`,而 undici 包的 `setGlobalDispatcher` 也修不好(全局 fetch 跑在 Node 内置的另一份 undici 上)。本机出网依赖 `http://127.0.0.1:10808`,所以 `lib/index.js` 用 `undici` 的 `fetch` 配 `EnvHttpProxyAgent`,解析顺序与 `dshmarket/lib/net.js` 一致。这个代理池**属于当前 Fiber**:在 `apply()` 里懒建,由 `ctx.effect` 的 disposer 关闭,不会跨卸载/HMR 泄漏连接。
 
-**前端不碰 Remote/typert。** 浏览器半边只用同源 `fetch('/openrouter-image/api/...')` 调 Host 自己注册的 `webServer` 前缀路由(`kind: 'prefix'`),接口有 `config` / `test` / `models` / `generate`。这比注册一个 `@Remote` 服务面简单得多,也不需要装饰器编译。
+**前端不碰 Remote/typert。** 浏览器半边只用同源 `fetch('/openrouter-imagen/api/...')` 调 Host 自己注册的 `webServer` 前缀路由(`kind: 'prefix'`),接口有 `config` / `test` / `models` / `generate`。这比注册一个 `@Remote` 服务面简单得多,也不需要装饰器编译。
 
 ## 安全与授权
 
@@ -267,4 +267,4 @@ npm publish
 
 ## 卸载
 
-删掉 profile 里的 `node_modules/dsh-openrouter-imagen` junction、从 profile 的 `cordis.patch.yml` 移除那条 `insert` 行,重启即可(若走过 CLI 安装,则用 `dsh plugin --profile desktop remove dsh-openrouter-imagen`)。设置文件里的 `openrouter-image` 段落可一并删除。
+删掉 profile 里的 `node_modules/dsh-openrouter-imagen` junction、从 profile 的 `cordis.patch.yml` 移除那条 `insert` 行,重启即可(若走过 CLI 安装,则用 `dsh plugin --profile desktop remove dsh-openrouter-imagen`)。设置文件里的 `openrouter-imagen` 段落可一并删除。

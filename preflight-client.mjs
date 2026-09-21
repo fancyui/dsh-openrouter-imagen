@@ -103,7 +103,7 @@ const fetchShim = async (url, init) => {
   calls.push({ path, method: init?.method ?? 'GET', body: init?.body ?? null })
   if (path === '/open-in-app/apps') return jsonResponse({ apps: ['explorer', 'vscode'] })
   if (path === '/open-in-app/open') return jsonResponse({ ok: true })
-  if (path.startsWith('/openrouter-image/api/config')) {
+  if (path.startsWith('/openrouter-imagen/api/config')) {
     // A POST is applied to the fixture, so a later mount reads back exactly what
     // an earlier one wrote — the same round trip the real Host performs.
     if (init?.method === 'POST' && typeof init.body === 'string') {
@@ -113,9 +113,9 @@ const fetchShim = async (url, init) => {
         /* a malformed body is itself one of the assertions */
       }
     }
-    return jsonResponse({ ok: true, hasKey: true, suggestions: ['a/model'], namespace: 'openrouter-image', config: { ...dockConfig } })
+    return jsonResponse({ ok: true, hasKey: true, suggestions: ['a/model'], namespace: 'openrouter-imagen', config: { ...dockConfig } })
   }
-  if (path.startsWith('/openrouter-image/api/reference')) return jsonResponse({ ok: true, count: 0, references: [] })
+  if (path.startsWith('/openrouter-imagen/api/reference')) return jsonResponse({ ok: true, count: 0, references: [] })
   return jsonResponse({ ok: false, error: `unexpected ${path}` })
 }
 
@@ -317,15 +317,15 @@ for (const entry of registered) {
   if (typeof entry.component !== 'function') check(`${label} has a component`, false)
 }
 
-const settings = find('settings.section', 'openrouter-image')
-const dock = find('conversation.input.dock', 'openrouter-image')
-const toggle = find('conversation.input.right', 'openrouter-image-toggle')
-const card = registered.find((r) => r.options.name === 'tool.call.toolview' && r.options.key === 'openrouter_generate_image')
+const settings = find('settings.section', 'openrouter-imagen')
+const dock = find('conversation.input.dock', 'openrouter-imagen')
+const toggle = find('conversation.input.right', 'openrouter-imagen-toggle')
+const card = registered.find((r) => r.options.name === 'tool.call.toolview' && r.options.key === 'openrouter_generate_imagen')
 
 check('registers the settings page', settings !== undefined)
 check('registers the composer strip slot', dock !== undefined)
 check('registers the composer toggle slot', toggle !== undefined)
-check('registers the tool card for its own tool name', card !== undefined, card === undefined ? 'no tool.call.toolview cell' : 'key=openrouter_generate_image')
+check('registers the tool card for its own tool name', card !== undefined, card === undefined ? 'no tool.call.toolview cell' : 'key=openrouter_generate_imagen')
 
 try {
   const settingsTree = mount(settings.component)
@@ -364,7 +364,7 @@ try {
   const settled = {
     kind: 'tool-call',
     isError: false,
-    call: { name: 'openrouter_generate_image', argsRaw: JSON.stringify({ prompt: '一只水彩狐狸' }) },
+    call: { name: 'openrouter_generate_imagen', argsRaw: JSON.stringify({ prompt: '一只水彩狐狸' }) },
     content: [
       {
         type: 'text',
@@ -453,12 +453,12 @@ try {
   )
 
   const runningKinds = []
-  walk(mount(card.component, { block: { argsRaw: JSON.stringify({ prompt: '运行中' }), name: 'openrouter_generate_image' }, loadImage: async () => 'blob:test' }), runningKinds)
+  walk(mount(card.component, { block: { argsRaw: JSON.stringify({ prompt: '运行中' }), name: 'openrouter_generate_imagen' }, loadImage: async () => 'blob:test' }), runningKinds)
   check('tool card renders the running state', runningKinds.includes('div'), `${runningKinds.length} nodes while running`)
 
   const failedKinds = []
   const failedTree = mount(card.component, {
-    block: { kind: 'tool-call', isError: true, call: { name: 'openrouter_generate_image', argsRaw: '{}' }, content: [{ type: 'text', text: '图像生成失败：401' }] },
+    block: { kind: 'tool-call', isError: true, call: { name: 'openrouter_generate_imagen', argsRaw: '{}' }, content: [{ type: 'text', text: '图像生成失败：401' }] },
     loadImage: async () => 'blob:test',
   })
   const failedText = collectText(failedTree, failedKinds).join(' ')
@@ -541,7 +541,7 @@ try {
     block: {
       kind: 'tool-call',
       isError: false,
-      call: { name: 'openrouter_generate_image', argsRaw: '{}' },
+      call: { name: 'openrouter_generate_imagen', argsRaw: '{}' },
       content: [{ type: 'text', text: '已生成 1 张图片（模型 m）。\n保存目录：X:\\p\\generated-images\n种子：987654（本次随机）\n文件：X:\\p\\generated-images\\a.webp' }],
     },
     loadImage: async () => 'blob:test',
