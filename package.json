@@ -1,5 +1,5 @@
 {
-  "name": "dsh-openrouter-image",
+  "name": "dsh-openrouter-imagen",
   "version": "0.1.0",
   "description": "DSH plugin: generate images through the OpenRouter Image API (text-to-image and image-to-image), with durable settings and a Settings page.",
   "license": "MIT",

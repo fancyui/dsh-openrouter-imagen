@@ -1,6 +1,6 @@
-# dsh-openrouter-image
+# dsh-openrouter-imagen
 
-> 仓库:[`fancyui/dsh-openrouter-imagen`](https://github.com/fancyui/dsh-openrouter-imagen) —— 包就在**仓库根目录**,仓库名带 `n`,npm 包名不带。
+> 仓库与 npm 包**同名**:[`fancyui/dsh-openrouter-imagen`](https://github.com/fancyui/dsh-openrouter-imagen),包就在仓库根目录。
 
 一个**可安装、常驻**的 DSH 插件:用 OpenRouter 的 Image API 生成图片,配置持久保存,重启后依然有效。
 
@@ -36,8 +36,8 @@
 把下面这段发给能执行本地终端的 agent:
 
 ```
-Install dsh-openrouter-image into my DSH desktop profile using the official npm registry.
-Run: dsh plugin --profile desktop add dsh-openrouter-image --registry=https://registry.npmjs.org/
+Install dsh-openrouter-imagen into my DSH desktop profile using the official npm registry.
+Run: dsh plugin --profile desktop add dsh-openrouter-imagen --registry=https://registry.npmjs.org/
 Confirm the installation, explain how to reload DSH, and tell me where the settings page is (Settings → 图像生成).
 ```
 
@@ -46,7 +46,7 @@ Confirm the installation, explain how to reload DSH, and tell me where the setti
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-dsh plugin --profile desktop add dsh-openrouter-image@latest --registry=https://registry.npmjs.org/
+dsh plugin --profile desktop add dsh-openrouter-imagen@latest --registry=https://registry.npmjs.org/
 ```
 
 重启 DSH、刷新页面,打开 **设置 → 图像生成**。更新就是再跑一次同一条命令。
@@ -56,7 +56,7 @@ dsh plugin --profile desktop add dsh-openrouter-image@latest --registry=https://
 ```powershell
 dsh plugin --profile desktop add github:fancyui/dsh-openrouter-imagen
 # 或本地 tarball / 目录
-dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-image-0.1.0.tgz
+dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-imagen-0.1.0.tgz
 ```
 
 ### 手动挂载(不走 CLI)
@@ -66,7 +66,7 @@ dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-
 1. 让包能从 profile 按裸名解析到 —— 建一个指向包目录的 junction(pnpm 的 `nodeLinker: hoisted` 用的是真实目录而非符号链接,这一点很重要:**ESM 按真实路径解析依赖**,符号链接会让包内的 `import '@deepseek-ai/...'` 找不到):
 
    ```powershell
-   $link = 'C:\Users\WR\.dsh\profiles\desktop\node_modules\dsh-openrouter-image'
+   $link = 'C:\Users\WR\.dsh\profiles\desktop\node_modules\dsh-openrouter-imagen'
    New-Item -ItemType Junction -Path $link -Target 'X:\github\dsh-openrouter-imagen'
    ```
 
@@ -77,7 +77,7 @@ dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-
    ```yaml
    - insert:
        - id: openrouter-image
-         name: 'dsh-openrouter-image'
+         name: 'dsh-openrouter-imagen'
          config:
            model: google/gemini-2.5-flash-image
            resolution: 1K
@@ -98,7 +98,7 @@ dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-
 所以要么走上面的 `cordis.patch.yml` 通道(用户层,不被 reconcile —— 实测跨两次重启内容原样保留),要么用官方 CLI 把依赖真正落到 `pnpm-lock.yaml`:
 
 ```bash
-dsh plugin --profile desktop add dsh-openrouter-image
+dsh plugin --profile desktop add dsh-openrouter-imagen
 ```
 
 **不要两个通道同时用**:同一个 `(kind, path)` 的 web 路由会被注册两次,重复的路由模式会让整个插件树在启动时失败。
@@ -233,7 +233,7 @@ peer 之所以标 `optional: true`:公共 registry 上 `@deepseek-ai/dsh-client-
 cd X:\github\dsh-openrouter-imagen
 git init -b main            # 只做一次
 git add .
-git commit -m "dsh-openrouter-image 0.1.0"
+git commit -m "dsh-openrouter-imagen 0.1.0"
 git remote add origin https://github.com/fancyui/dsh-openrouter-imagen.git
 git push -u origin main
 ```
@@ -267,4 +267,4 @@ npm publish
 
 ## 卸载
 
-删掉 profile 里的 `node_modules/dsh-openrouter-image` junction、从 profile 的 `cordis.patch.yml` 移除那条 `insert` 行,重启即可(若走过 CLI 安装,则用 `dsh plugin --profile desktop remove dsh-openrouter-image`)。设置文件里的 `openrouter-image` 段落可一并删除。
+删掉 profile 里的 `node_modules/dsh-openrouter-imagen` junction、从 profile 的 `cordis.patch.yml` 移除那条 `insert` 行,重启即可(若走过 CLI 安装,则用 `dsh plugin --profile desktop remove dsh-openrouter-imagen`)。设置文件里的 `openrouter-image` 段落可一并删除。

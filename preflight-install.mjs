@@ -15,7 +15,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const PROFILE = 'C:/Users/WR/.dsh/profiles/desktop'
-const TARGET = 'dsh-openrouter-image'
+const TARGET = 'dsh-openrouter-imagen'
 const require = createRequire(`file:///${PROFILE}/package.json`)
 
 // Bare ESM imports in this file would resolve from the workspace, not from the

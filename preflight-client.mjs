@@ -1,5 +1,5 @@
 /**
- * Pre-flight harness for dsh-openrouter-image's Client half.
+ * Pre-flight harness for dsh-openrouter-imagen's Client half.
  *
  * Loads lib/client.js the way the browser module system does — through
  * `window.__ModuleLoader__.load({ id, factory })` — then checks the plugin

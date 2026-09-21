@@ -1,5 +1,5 @@
 /**
- * Pre-flight harness for dsh-openrouter-image's Host half.
+ * Pre-flight harness for dsh-openrouter-imagen's Host half.
  *
  * Runs the real plugin against a local mock of the OpenRouter API, so the whole
  * request path is asserted — settings → request body → response decode →
