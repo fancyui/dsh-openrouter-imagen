@@ -1,0 +1,8 @@
+# Keep the repository LF-only regardless of the local core.autocrlf setting.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary

@@ -1,0 +1,37 @@
+# dsh-openrouter-image bundle patch
+#
+# This is the `dsh.bundle.patch` layer of the package: when the plugin is
+# installed through the official CLI —
+#
+#   dsh plugin --profile desktop add dsh-openrouter-image
+#
+# — the command reconciles `dsh.profile.bundles` against installed packages
+# and, seeing this declaration, appends `dsh-openrouter-image` to the bundle
+# stack. The profile boot then merges THIS patch (a single `insert` of the
+# plugin row), exactly like a manual cordis.patch.yml mount line.
+#
+# Manual mount (equivalent, if you are not using the CLI): add
+#
+#   - insert:
+#       - id: openrouter-image
+#         name: 'dsh-openrouter-image'
+#
+# to the profile's own cordis.patch.yml. Do not do both — two mounts register
+# the same web route prefix twice and duplicate (kind, path) throws at boot.
+#
+# `config` supplies the `base` layer of the plugin's settings namespace. The
+# user layer (Settings > 图像生成, persisted in settings.yaml) resolves above
+# it, so editing this file only changes the defaults a user has not overridden.
+- insert:
+    - id: openrouter-image
+      name: 'dsh-openrouter-image'
+      config:
+        model: google/gemini-2.5-flash-image
+        resolution: 1K
+        aspectRatio: auto
+        quality: auto
+        outputFormat: png
+        count: 1
+        background: auto
+        seed: ''
+        saveDir: generated-images

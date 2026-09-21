@@ -1,0 +1,17 @@
+# Dependencies are installed from package.json, never committed.
+node_modules/
+.pnpm-store/
+pnpm-debug.log*
+
+# Local runtime output: generated images, offline previews, logs, packed tarballs.
+generated-images/
+preview/
+*.log
+*.tgz
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
