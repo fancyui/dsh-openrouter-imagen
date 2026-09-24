@@ -4,8 +4,23 @@
 
 一个**可安装、常驻**的 DSH 插件:用 OpenRouter 的 Image API 生成图片,配置持久保存,重启后依然有效。
 
-- **Host 半边**:注册 `openrouter-imagen` 设置命名空间、`openrouter_generate_imagen` 工具、以及 `/openrouter-imagen/api/*` 同源 JSON 路由。
+- **Host 半边**:声明 `openrouter-imagen` 设置表单(`Config` 的 volatile 字段)、注册 `openrouter_generate_imagen` 工具、以及 `/openrouter-imagen/api/*` 同源 JSON 路由。
 - **Client 半边**:注册三个槽位 —— **设置 → 图像生成** 的配置页、输入框上方的参数条(`conversation.input.dock` 加 `conversation.input.right` 的「图像」按钮)、以及本工具在对话里的卡片(`tool.call.toolview`,把生成的图直接画出来)。
+
+## 兼容性
+
+需要 **DSH ≥ 0.1.7-rc.1**。0.1.7 改了设置服务的契约,0.1.6 及更早的写法在 0.1.7 上会**启动即失败**:
+
+| | ≤ 0.1.6 | ≥ 0.1.7(本插件 0.1.1 起) |
+| --- | --- | --- |
+| 声明设置 | `ctx.settings.register(NS, Config, { base })` 返回 scope | 导出的 `Config` **就是**表单;命名空间 = 插件行的 `id` |
+| 读值 | `scope.get()` | `apply(ctx, config)` 收到的 volatile 引用,`config.field.get()` |
+| 写值 | `scope.update(patch)` | `ctx.settings.update(NS, patch)` |
+| 可编辑字段 | 任意 | 必须声明 `.volatile()`,否则该行不可写(`settings.update` 抛 `No configurable plugin entry`) |
+
+`inject` 也不再需要 `'settings'`:设置服务是 `ctx.get('settings')` 惰性取的。升级 DSH 后如果插件被 runtime 静默禁用,日志里会出现 `Plugin dsh-openrouter-imagen@x is incompatible with dsh y: peerDependencies {...}` —— 那是 `peerDependencies` 的版本区间没覆盖新运行时,补区间(本包做法)或临时 `dsh plugin allow-version` 放行。
+
+`npm run smoke` 用桩 Context 真跑一遍 Host 半边,断言上面几条契约(不会发网络请求,也不花钱)。
 
 ## 目录结构
 
@@ -20,6 +35,7 @@
 ├── preflight.mjs           # Host 半边自检
 ├── preflight-client.mjs    # Client 半边自检
 ├── preflight-install.mjs   # 安装 / 挂载自检
+├── smoke-boot.mjs          # 0.1.7 契约冒烟(Host 半边真跑,桩 Context)
 └── preview-settings.mjs    # 设置页、输入条的离线排版预览
 ```
 
@@ -56,7 +72,7 @@ dsh plugin --profile desktop add dsh-openrouter-imagen@latest --registry=https:/
 ```powershell
 dsh plugin --profile desktop add github:fancyui/dsh-openrouter-imagen
 # 或本地 tarball / 目录
-dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-imagen-0.1.0.tgz
+dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-imagen-0.1.1.tgz
 ```
 
 ### 手动挂载(不走 CLI)
@@ -233,7 +249,7 @@ peer 之所以标 `optional: true`:公共 registry 上 `@deepseek-ai/dsh-client-
 cd X:\github\dsh-openrouter-imagen
 git init -b main            # 只做一次
 git add .
-git commit -m "dsh-openrouter-imagen 0.1.0"
+git commit -m "dsh-openrouter-imagen 0.1.1"
 git remote add origin https://github.com/fancyui/dsh-openrouter-imagen.git
 git push -u origin main
 ```
