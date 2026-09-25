@@ -72,11 +72,12 @@ const check = (label, ok, detail) => {
 
 /* ---------- a cordis context that enforces the inject guard ---------- */
 
-const registered = { tools: [], routes: [] }
+const registered = { tools: [], routes: [], plugins: [] }
 
 const baseConfig = {
   apiKey: '',
   model: 'google/gemini-2.5-flash-image',
+  models: [],
   resolution: '1K',
   aspectRatio: 'auto',
   quality: 'auto',
@@ -87,7 +88,17 @@ const baseConfig = {
   providerSort: '',
   extraJson: '',
   saveDir: 'generated-images',
+  skills: true,
 }
+
+/**
+ * dsh ≥ 0.1.7 hands `apply` the live configuration as volatile references, not
+ * as plain values, and reads go through `ref.get()`. Building one ref per field
+ * over `baseConfig` keeps this harness faithful: a `settings.update()` write
+ * lands in `baseConfig` and the next read sees it, exactly like the real loader.
+ * Passing a bare `{}` here is what silently emptied every config read.
+ */
+const volatileConfig = Object.fromEntries(Object.entries(baseConfig).map(([key]) => [key, { get: () => baseConfig[key] }]))
 
 const webServer = {
   register: (route) => {
@@ -160,16 +171,22 @@ const rawCtx = {
       return () => {}
     },
   },
+  /** The bundled skill half is mounted through `ctx.plugin()`, so the guard has to allow it. */
+  plugin: (mod) => {
+    registered.plugins.push(mod)
+  },
   get: (name) =>
     name === 'webServer'
       ? webServer
-      : name === 'attachments'
-        ? attachments
-        : name === 'connection'
-          ? connection
-          : name === 'fs'
-            ? fs
-            : undefined,
+      : name === 'settings'
+        ? { update: async (ns, patch) => Object.assign(baseConfig, patch) }
+        : name === 'attachments'
+          ? attachments
+          : name === 'connection'
+            ? connection
+            : name === 'fs'
+              ? fs
+              : undefined,
   // Dynamic injection must actually PROVIDE the requested service inside the
   // callback scope, or the fallback branch looks broken when only the harness is.
   inject: (deps, callback) => {
@@ -242,11 +259,16 @@ async function call(route, method, path, body) {
 }
 
 const mod = await import(pathToFileURL(join(ROOT, 'lib', 'index.js')).href)
-mod.apply(ctx, {})
+mod.apply(ctx, volatileConfig)
 
 const route = registered.routes[0]
 check('model tool registered', registered.tools.some((tool) => tool.name === 'openrouter_generate_imagen'))
 check('api route registered', route !== undefined, registered.routes.map((r) => `${r.kind} ${r.path}`).join(', '))
+check(
+  'bundled skill half mounted as a child plugin',
+  registered.plugins.length === 1 && registered.plugins[0]?.name === 'openrouter-imagen-skills',
+  registered.plugins.map((plugin) => plugin?.name).join(', ') || 'none mounted',
+)
 
 /* config round-trip */
 const before = await call(route, 'GET', '/openrouter-imagen/api/config')
@@ -350,6 +372,25 @@ check(
 )
 await call(route, 'POST', '/openrouter-imagen/api/config', { seed: '42' })
 
+/* the model palette: when 模型 itself is empty, the first palette entry is the default */
+const paletteWrite = await call(route, 'POST', '/openrouter-imagen/api/config', {
+  model: '',
+  models: ['pre/a-model', ' pre/a-model ', 'pre/b-model', '', 42],
+})
+check(
+  'the palette write is trimmed, deduped and string-only',
+  paletteWrite.json.ok === true && JSON.stringify(paletteWrite.json.config?.models) === JSON.stringify(['pre/a-model', 'pre/b-model']),
+  JSON.stringify(paletteWrite.json.config?.models),
+)
+const paletteRun = await call(route, 'POST', '/openrouter-imagen/api/generate', { prompt: 'palette probe' })
+const paletteBody = captured.requests.filter((entry) => entry.url === '/images' && entry.method === 'POST').pop()?.body ?? {}
+check(
+  'an empty 模型 falls back to the first palette entry',
+  paletteRun.json.ok === true && paletteRun.json.params?.model === 'pre/a-model' && paletteBody.model === 'pre/a-model',
+  JSON.stringify({ params: paletteRun.json.params?.model, body: paletteBody.model, error: paletteRun.json.error }),
+)
+await call(route, 'POST', '/openrouter-imagen/api/config', { model: 'openai/gpt-image-1', models: [] })
+
 /* the remaining endpoints */
 const keyTest = await call(route, 'GET', '/openrouter-imagen/api/test')
 check('GET /test reports the key limits', keyTest.json.ok === true && keyTest.json.report.includes('preflight-key'), keyTest.json.report ?? keyTest.json.error)
@@ -448,17 +489,66 @@ check(
   tool.description.includes('不要在文字里复述参考图') && tool.description.includes('回复一句话'),
   tool.description.slice(0, 120),
 )
+// The prompt guidance must teach a DERIVATION, not a lookup. A closed style
+// taxonomy just moves the old photography-template bug up one level: the model
+// then forces every request into one of the buckets instead of reading it.
 check(
-  'the description carries the professional prompt structure',
-  tool.description.includes('镜头与构图') && tool.description.includes('光线') && tool.description.includes('商业摄影'),
+  'the description tells the model to derive the axes, not match a style list',
+  tool.description.includes('不要往固定几类里硬塞') &&
+    tool.description.includes('靠什么被认出来') &&
+    tool.description.includes('它没有什么'),
   '',
 )
 check(
+  'the description scopes photographic gear terms to photography',
+  tool.description.includes('摄影与照片级 3D 的器材与布光') && tool.description.includes('「布光」是摄影专属'),
+  '',
+)
+check(
+  'the description no longer hard-codes a commercial-photography structure',
+  !tool.description.includes('商业摄影的结构'),
+  '',
+)
+check(
+  'the description offers no closed style taxonomy to match against',
+  !tool.description.includes('画风族') && !tool.description.includes('先定画风'),
+  '',
+)
+check(
+  'the description frames the prompt skeleton as a checklist, not a template',
+  tool.description.includes('检查表不是模板') &&
+    ['主体与动作', '媒介与画风', '构图与取景', '色彩与影调', '细节与质感'].every((part) => tool.description.includes(part)),
+  '',
+)
+// Must mirror buildBody() in lib/index.js: the model has to know which fields the
+// API carries, or it invents them in the prompt.
+const API_FIELDS = ['model', 'n', 'resolution', 'aspect_ratio', 'quality', 'output_format', 'background', 'seed', 'provider', 'input_references']
+check(
+  'the description names every API field the plugin submits',
+  API_FIELDS.every((field) => tool.description.includes(`\`${field}\``)),
+  API_FIELDS.filter((field) => !tool.description.includes(`\`${field}\``)).join(', ') || `all ${API_FIELDS.length} present`,
+)
+check(
   'the description makes the user panel the default and forbids picking parameters for him',
-  tool.description.includes('参数默认由用户的面板决定') &&
-    tool.description.includes('一律省略') &&
-    tool.description.includes('不要替用户挑参数'),
-  tool.description.slice(tool.description.indexOf('参数默认')),
+  tool.description.includes('默认只填 `prompt`') &&
+    tool.description.includes('留空就是用面板的值') &&
+    tool.description.includes('那是用户的设置，不是你的决定'),
+  tool.description.slice(tool.description.indexOf('默认只填')),
+)
+check(
+  'the description says leaving the optional parameters blank is correct',
+  tool.description.includes('留空是正确行为、不是遗漏'),
+  '',
+)
+check(
+  'the description forbids deciding the image count for the user',
+  tool.description.includes('不要自己判断「这次适合出几张」'),
+  '',
+)
+check(
+  'the description keeps panel fields out of the prompt and says why',
+  tool.description.includes('面板参数的值也不要写进 prompt') && tool.description.includes('看不到面板当前的值'),
+  '',
 )
 // The override parameters stay available for the cases the user asks for by
 // name, but each one has to say "omit unless he asked" — that wording is the

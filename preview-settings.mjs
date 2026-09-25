@@ -52,7 +52,8 @@ const React = {
 }
 
 const CONFIG = {
-  model: 'openai/gpt-image-2.5-sunburst',
+  model: 'x-ai/grok-imagine-image-quality',
+  models: ['x-ai/grok-imagine-image-quality', 'google/gemini-2.5-flash-image', 'openai/gpt-image-1'],
   resolution: '1K',
   aspectRatio: '1:1',
   quality: 'auto',
@@ -69,7 +70,7 @@ const fetchShim = async (url) => {
   const action = String(url).split('/').pop()
   const payload =
     action === 'config'
-      ? { ok: true, config: CONFIG, hasKey: true, suggestions: ['openai/gpt-image-2.5-sunburst', 'google/gemini-2.5-flash-image'] }
+      ? { ok: true, config: CONFIG, hasKey: true, suggestions: ['openai/gpt-image-1', 'google/gemini-2.5-flash-image', 'bytedance-seed/seedream-4.5', 'black-forest-labs/flux.2-pro'] }
       : { ok: true, models: [], count: 0 }
   return { status: 200, text: async () => JSON.stringify(payload) }
 }

@@ -77,6 +77,7 @@ const documentShim = {
 /** The settings payload every component loads; also the shape the Host serves. */
 const dockConfig = {
   model: 'openai/gpt-image-2.5-sunburst',
+  models: ['openai/gpt-image-2.5-sunburst', 'google/gemini-2.5-flash-image'],
   resolution: '1K',
   aspectRatio: '1:1',
   quality: 'auto',
@@ -103,6 +104,9 @@ const fetchShim = async (url, init) => {
   calls.push({ path, method: init?.method ?? 'GET', body: init?.body ?? null })
   if (path === '/open-in-app/apps') return jsonResponse({ apps: ['explorer', 'vscode'] })
   if (path === '/open-in-app/open') return jsonResponse({ ok: true })
+  if (path.startsWith('/openrouter-imagen/api/models')) {
+    return jsonResponse({ ok: true, models: [{ id: 'z/model', name: 'Z' }, { id: 'a/model', name: 'A' }], count: 2 })
+  }
   if (path.startsWith('/openrouter-imagen/api/config')) {
     // A POST is applied to the fixture, so a later mount reads back exactly what
     // an earlier one wrote — the same round trip the real Host performs.
@@ -143,6 +147,7 @@ const sandbox = {
   setInterval: () => 0,
   clearInterval: () => {},
   setTimeout,
+  clearTimeout,
   console,
 }
 vm.createContext(sandbox)
@@ -306,6 +311,12 @@ const render = (component, props) => {
   return kinds
 }
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+/** Re-render the CURRENT component with its state cells preserved (no effect re-run). */
+const retree = (component) => {
+  cursor = 0
+  effects = []
+  return component()
+}
 const firstButton = (node) => findNode(node, (element) => element.type === 'button')
 const buttonByText = (node, text) =>
   findNode(node, (element) => element.type === 'button' && collectText(element.children ?? [], []).join('') === text)
@@ -328,35 +339,147 @@ check('registers the composer toggle slot', toggle !== undefined)
 check('registers the tool card for its own tool name', card !== undefined, card === undefined ? 'no tool.call.toolview cell' : 'key=openrouter_generate_imagen')
 
 try {
-  const settingsTree = mount(settings.component)
+  mount(settings.component)
+  await tick()
+  const settingsTree = retree(settings.component)
   const settingsKinds = []
   walk(settingsTree, settingsKinds)
   const settingsText = collectText(settingsTree, [])
   check('settings page renders', settingsKinds.length > 0, `${settingsKinds.length} nodes`)
 
-  // Settings is now the long-lived configuration only: the per-generation knobs
+  // Settings is the long-lived configuration only: the per-generation knobs
   // live in the composer panel, and the test-generation block is gone entirely.
   const selects = settingsKinds.filter((kind) => kind === 'select').length
-  check('Settings keeps only the Provider sort select', selects === 1, `${selects} select(s)`)
+  check('Settings keeps the Provider sort and catalog selects', selects === 2, `${selects} select(s)`)
   check('Settings no longer embeds a test generation', !settingsText.includes('试生成') && !settingsKinds.includes('textarea'), [...new Set(settingsKinds)].join(', '))
   check('Settings no longer offers 附加请求参数', !settingsKinds.includes('textarea'), 'no textarea left on the page')
   check('Settings gained 保存目录', settingsText.includes('保存目录'), 'output location is configurable')
   check('Settings still offers the model list', settingsKinds.includes('datalist'))
   check('Settings names the composer panel', settingsText.some((t) => t.includes('「图像」面板')), 'subtitle points at the panel')
 
-  // Four sections, and the save action is the LAST block on the page rather
-  // than a header button.
+  // Five sections (密钥 / 模型 / 请求 / 输出 / 技能), and the page closes with a
+  // save-status bar instead of a save button: every change posts itself.
   const sections = settingsKinds.filter((kind) => kind === 'section').length
-  check('Settings is four titled sections', sections === 4, `${sections} sections`)
-  const foot = settingsTree.children[settingsTree.children.length - 1]
-  // The label is 加载中… until the config read lands, so assert the control, not
-  // the word.
-  const footButton = findNode(foot, (element) => element.type === 'button' && String(element.props.className ?? '').includes('dsh-oi-btn-primary'))
-  check('保存配置 sits at the bottom of the page', foot?.props?.className === 'dsh-oi-foot' && footButton !== null, foot?.props?.className)
-  check('the header no longer carries a save button', buttonByText(settingsTree.children[0], '保存配置') === null)
-  check('the bottom button is the only primary action', findNode(settingsTree.children[0], (element) => element.type === 'button' && String(element.props.className ?? '').includes('dsh-oi-btn-primary')) === null)
+  check('Settings is five titled sections', sections === 5, `${sections} sections`)
+  const savebar = settingsTree.children[settingsTree.children.length - 1]
+  check('a save-status bar closes the page', savebar?.props?.className === 'dsh-oi-savebar', savebar?.props?.className)
+  check('the save button is gone entirely', findNode(settingsTree, (element) => element.type === 'button' && String(element.props.className ?? '').includes('dsh-oi-btn-primary')) === null && buttonByText(settingsTree, '保存配置') === null)
+  check('the page promises auto-save', settingsText.some((t) => t.includes('自动保存')), '')
 } catch (error) {
   check('settings page renders', false, error?.stack ?? String(error))
+}
+
+/* ---- auto-save behaviour: every change writes itself, no button involved ---- */
+
+try {
+  const selectsOf = (tree) => findNodes(tree, (element) => element.type === 'select')
+  const modelRowsOf = (tree) =>
+    findNodes(tree, (element) => element.type === 'div' && String(element.props.className ?? '').includes('dsh-oi-model-row'))
+  const rowText = (row) => collectText(row.children ?? [], []).join(' ')
+  const configPosts = () => calls.filter((entry) => entry.path.endsWith('/config') && entry.method === 'POST')
+
+  mount(settings.component)
+  await tick()
+  let tree = retree(settings.component)
+
+  // The Provider sort select commits itself the moment it changes.
+  const sortSelect = selectsOf(tree).find((element) => findNode(element, (option) => option.props?.value === 'price') !== null)
+  const beforeSort = calls.length
+  sortSelect?.props?.onChange?.({ target: { value: 'price' } })
+  await tick()
+  const sortPost = calls.slice(beforeSort).find((entry) => String(entry.body).includes('"providerSort":"price"'))
+  check('changing a select auto-saves at once', sortPost !== undefined, sortPost === undefined ? 'no POST' : String(sortPost.body))
+
+  // The model palette: one row per configured model, 默认 on the row the next
+  // generation uses, and clicking another row hands 默认 over without a save step.
+  let rows = modelRowsOf(tree)
+  check('each configured model is one palette row', rows.length === 2, `${rows.length} row(s)`)
+  const chipOf = (row) => findNode(row, (element) => element.type === 'span' && element.props?.className === 'dsh-oi-chip')
+  check('the default row carries the 默认 chip', chipOf(rows[0]) !== null && chipOf(rows[1]) === null, rowText(rows[1]).trim())
+  const beforeDefault = calls.length
+  rows[1]?.props?.onClick?.()
+  await tick()
+  const defaultPost = calls.slice(beforeDefault).find((entry) => String(entry.body).includes('"model":"google/gemini-2.5-flash-image"'))
+  check('clicking a row sets it as the default model', defaultPost !== undefined, defaultPost === undefined ? 'no POST' : String(defaultPost.body))
+
+  // 移除 writes the surviving palette together with the default that follows it.
+  tree = retree(settings.component)
+  rows = modelRowsOf(tree)
+  const beforeRemove = calls.length
+  findNode(rows[0], (element) => element.type === 'button' && collectText(element.children ?? [], []).join('') === '移除')?.props?.onClick?.({ stopPropagation() {} })
+  await tick()
+  const removePost = calls.slice(beforeDefault).filter((entry) => String(entry.body).includes('"models"')).pop()
+  check(
+    'removing a model persists the surviving palette and default',
+    removePost !== undefined && String(removePost.body).includes('google/gemini-2.5-flash-image') && !String(removePost.body).includes('openai/gpt-image-2.5-sunburst'),
+    removePost === undefined ? 'no POST' : String(removePost.body),
+  )
+
+  // Adding one model by hand (the Enter path, which reads the event, not stale state).
+  const beforeAdd = calls.length
+  const addInput = findNode(retree(settings.component), (element) => element.type === 'input' && element.props?.list === 'dsh-oi-model-options')
+  addInput?.props?.onKeyDown?.({ key: 'Enter', target: { value: 'custom/model' }, preventDefault() {} })
+  await tick()
+  const addPost = calls.slice(beforeAdd).find((entry) => String(entry.body).includes('custom/model'))
+  check('adding a model by id writes the whole palette', addPost !== undefined, addPost === undefined ? 'no POST' : String(addPost.body))
+
+  // The catalog dropdown is filled BEFORE any fetch (the host's suggestions) and
+  // picking one adds it — this is the fix for "拉取了列表但下拉是空的".
+  tree = retree(settings.component)
+  const pickerSelect = selectsOf(tree).find((element) => findNode(element, (option) => option.props?.value === 'a/model') !== null)
+  check('the catalog select is prefilled with suggestions', pickerSelect !== undefined, pickerSelect === undefined ? 'no select with a/model' : '')
+  const beforePick = calls.length
+  pickerSelect?.props?.onChange?.({ target: { value: 'a/model' } })
+  await tick()
+  check('picking from the dropdown adds that model', calls.slice(beforePick).some((entry) => String(entry.body).includes('"a/model"')), '')
+
+  // 拉取模型列表 fills the SAME dropdown with the fetched catalog.
+  const fetchButton = buttonByText(retree(settings.component), '拉取模型列表')
+  const beforeFetch = calls.length
+  fetchButton?.props?.onClick?.()
+  await tick()
+  const fetchedTree = retree(settings.component)
+  const fetchedSelect = selectsOf(fetchedTree).find((element) => findNode(element, (option) => option.props?.value === 'z/model') !== null)
+  check('拉取模型列表 fills the dropdown with the fetched catalog', fetchedSelect !== undefined && calls.slice(beforeFetch).some((entry) => entry.path.includes('/models')), '')
+  fetchedSelect?.props?.onChange?.({ target: { value: 'z/model' } })
+  await tick()
+  check('picking a fetched model adds it to the palette', calls.slice(beforeFetch).some((entry) => String(entry.body).includes('"z/model"')), '')
+
+  // The API key commits on blur (blank never writes, per the write-only rule).
+  const keyInput = findNode(retree(settings.component), (element) => element.type === 'input' && element.props?.type === 'password')
+  keyInput?.props?.onChange?.({ target: { value: 'sk-or-v1-preflight' } })
+  const beforeKey = calls.length
+  findNode(retree(settings.component), (element) => element.type === 'input' && element.props?.type === 'password')?.props?.onBlur?.({ target: { value: 'sk-or-v1-preflight' } })
+  await tick()
+  const keyPost = calls.slice(beforeKey).find((entry) => String(entry.body).includes('"apiKey":"sk-or-v1-preflight"'))
+  check('a typed API key auto-saves on blur', keyPost !== undefined, keyPost === undefined ? 'no POST' : String(keyPost.body))
+
+  // Text fields save themselves after a short debounce — no blur needed.
+  const beforeDebounce = calls.length
+  const saveDirInput = findNode(retree(settings.component), (element) => element.type === 'input' && element.props?.placeholder === 'generated-images')
+  saveDirInput?.props?.onChange?.({ target: { value: 'out-x' } })
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  const debouncePost = calls.slice(beforeDebounce).find((entry) => String(entry.body).includes('"saveDir":"out-x"'))
+  check('a text field auto-saves after the debounce', debouncePost !== undefined, debouncePost === undefined ? 'no POST' : String(debouncePost.body))
+
+  // …and blurring before the timer fires flushes once, not twice.
+  const beforeFlush = calls.length
+  const dirInput = findNode(retree(settings.component), (element) => element.type === 'input' && element.props?.placeholder === 'generated-images')
+  dirInput?.props?.onChange?.({ target: { value: 'out-y' } })
+  dirInput?.props?.onBlur?.({ target: { value: 'out-y' } })
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  const dirPosts = calls.slice(beforeFlush).filter((entry) => String(entry.body).includes('saveDir'))
+  check('blur flushes the pending write instead of doubling it', dirPosts.length === 1 && String(dirPosts[0].body).includes('"saveDir":"out-y"'), JSON.stringify(dirPosts.map((entry) => entry.body)))
+
+  // The one boolean rides the product's own toggle.
+  const skillsSwitch = findNode(retree(settings.component), (element) => element.type === 'input' && element.props?.type === 'checkbox')
+  check('the skills toggle is a native switch', skillsSwitch !== null, '')
+  const beforeSwitch = calls.length
+  skillsSwitch?.props?.onChange?.({ target: { checked: false } })
+  await tick()
+  check('toggling the skill writes itself', calls.slice(beforeSwitch).some((entry) => String(entry.body).includes('"skills":false')), '')
+} catch (error) {
+  check('settings auto-save flow', false, error?.stack ?? String(error))
 }
 
 try {
@@ -486,6 +609,11 @@ try {
 try {
   check('composer strip starts collapsed', render(dock.component).length === 0, 'renders nothing until asked')
 
+  // The palette tests above rewrote the fixture through the auto-save POSTs;
+  // restore the two-model palette the strip assertions assume.
+  dockConfig.model = 'openai/gpt-image-2.5-sunburst'
+  dockConfig.models = ['openai/gpt-image-2.5-sunburst', 'google/gemini-2.5-flash-image']
+
   const toggleKinds = render(toggle.component)
   check('toggle renders a button', toggleKinds.includes('button'), [...new Set(toggleKinds)].join(', '))
 
@@ -493,12 +621,31 @@ try {
   check('toggle exposes a click handler', typeof button?.props?.onClick === 'function')
   button?.props?.onClick?.()
 
-  const dockTree = mount(dock.component)
+  mount(dock.component)
+  await tick()
+  const dockTree = retree(dock.component)
   const expanded = []
   walk(dockTree, expanded)
   const selects = expanded.filter((kind) => kind === 'select').length
-  check('clicking the toggle reveals the generation knobs', selects >= 6, `${expanded.length} nodes, ${selects} selects`)
-  check('the strip gained the 背景 select', selects === 6, `${selects} selects`)
+  check('clicking the toggle reveals the generation knobs', selects >= 7, `${expanded.length} nodes, ${selects} selects`)
+  // 模型 rides in front of the six per-call knobs once the user added a second
+  // model in Settings — the palette is what makes it switchable in place.
+  check('the strip gained the model switcher', selects === 7, `${selects} selects`)
+  const modelSelect = findNode(
+    dockTree,
+    (element) =>
+      element.type === 'select' &&
+      findNode(element, (option) => option.props?.value === 'google/gemini-2.5-flash-image') !== null,
+  )
+  check('the model switcher lists the configured palette', modelSelect !== undefined && modelSelect.props.value === 'openai/gpt-image-2.5-sunburst', '')
+  const beforeModel = calls.length
+  modelSelect?.props?.onChange?.({ target: { value: 'google/gemini-2.5-flash-image' } })
+  await tick()
+  check(
+    'switching the model in the strip writes the settings namespace',
+    calls.slice(beforeModel).some((entry) => entry.path.endsWith('/config') && String(entry.body).includes('"model":"google/gemini-2.5-flash-image"')),
+    '',
+  )
 
   // 种子 lives in this strip, on the same row as the selects. The JSON escape
   // hatch that used to sit beside it is gone: the strip is one row of knobs.
