@@ -238,6 +238,25 @@ check('tool description offers no closed taxonomy to match against', !tool.descr
 check('tool description no longer hard-codes a photography structure', !tool.description.includes('商业摄影的结构'))
 check('tool description frames the skeleton as a checklist', tool.description.includes('检查表不是模板'))
 
+// Handoff from a third-party prompt skill (e.g. gpt-image-2-style-library): the
+// prompt it produces is already written, and rewriting it is how layout, exact
+// text and negative constraints get lost. The rule lives in the tool description
+// on purpose -- that layer ships with every request, while the bundled skill body
+// only arrives if the model decides to load it (measured: a run that invoked the
+// style-library skill and then this tool never loaded the bundled skill at all).
+check('tool description handles an already-written prompt', tool.description.includes('已经有另一条写好、可直接使用的提示词时，不要再自己写一条'))
+check('tool description says to pass it through whole', tool.description.includes('整段填进 `prompt`') && tool.description.includes('不要精简'))
+check('tool description still demands the tool call, not a text answer', tool.description.includes('给出提示词不等于交付'))
+// The handoff must not read as a licence to edit the prompt: the ratio/background
+// values the template mentions stay in the text, and the fields win.
+check('tool description keeps field values out of the handoff text edit', tool.description.includes('画幅、背景这类值不因此变成你的'))
+// A guard on the reverse direction: the always-loaded layer must not lose its
+// existing parameter discipline while gaining this one.
+check('tool description keeps the default-fill rule verbatim', tool.description.includes('**默认只填 `prompt`。**'))
+check('tool description keeps the panel-values rule verbatim', tool.description.includes('**面板参数的值也不要写进 prompt。**'))
+// The description is resident on every request, so its size is a standing cost.
+check('tool description stays within its context budget', tool.description.length <= 3000, `${tool.description.length} chars`)
+
 // Frontmatter makes the directory valid for the filesystem provider too, so it
 // must stay in sync with the description the catalog actually shows.
 const raw = readFileSync(SKILL_PATH, 'utf8')

@@ -1,0 +1,43 @@
+diff --git a/SKILL.md b/SKILL.md
+index 4186ace..c4f0026 100644
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -15,7 +15,7 @@ Example request: `用 gpt-image-2-style-library 技能生成城市生命系统
+ 
+ ## Reference
+ 
+-- Read `references/style-library.md` before choosing a template or style.
++- Read `references/style-library.md` before choosing a template or style. **Reading this SKILL.md is not reading the library.** If the candidate template's `- ID:`, `- Category:`, `- Styles:`, `- Scenes:`, `- Tags:`, and `- Example cases:` are not already in your context, you have not read it: read the file.
+ - The reference is generated from `data/style-library.json` in the repository.
+ - Prefer the reference over memory when template names, categories, covers, or style tags matter.
+ 
+@@ -23,16 +23,17 @@ Example request: `用 gpt-image-2-style-library 技能生成城市生命系统
+ 
+ 1. Detect the user's language and answer in that language.
+ 2. Identify the user's target output: product, poster, UI, infographic, brand, photo, illustration, character, scene, history, document, or special task.
+-3. Match the request in this order: template category, visual style tag, scene tag, then nearest example cases.
+-4. If one template is clearly strongest, use it directly. If several are plausible, present 2-3 options with short reasons and ask the user to choose.
+-5. Build the final prompt with these blocks:
++3. **Gate: you cannot cite what you have not read.** Every ID, category, style/scene tag, cover path, template name and example-case number you are about to write must come from `references/style-library.md` as read in this task — never from memory, and never from an earlier session. If you cannot quote the candidate's `- Category:` line verbatim, read the file before matching.
++4. Match the request in this order: template category, visual style tag, scene tag, then nearest example cases.
++5. If one template is clearly strongest, use it directly. If several are plausible, present 2-3 options with short reasons and ask the user to choose.
++6. Build the final prompt with these blocks:
+    - subject and task
+    - composition and layout
+    - visual style and materials
+    - text and label requirements
+    - aspect ratio and output format
+    - constraints and negative details
+-6. Include the selected template name and any useful example case IDs.
++7. Include the selected template name and any useful example case IDs.
+ 
+ ## Output Defaults
+ 
+@@ -41,6 +42,7 @@ Example request: `用 gpt-image-2-style-library 技能生成城市生命系统
+ - For Chinese requests, write the final prompt in Chinese unless the user asks for English.
+ - For English requests, write the final prompt in English unless the user asks for Chinese.
+ - When the user asks for multiple concepts, reuse one template and vary subject, composition, palette, and scene.
++- Before you print the final prompt: if you did not read `references/style-library.md` in this task, or cannot quote one matching template block verbatim, go read it now. Do not reconstruct the library from memory when a template name, ID, or case number is on the line.
+ 
+ ## Maintenance
+ 
