@@ -16,11 +16,16 @@ import { dirname, join } from 'node:path'
 
 const PROFILE = 'C:/Users/WR/.dsh/profiles/desktop'
 const TARGET = 'dsh-openrouter-imagen'
-const require = createRequire(`file:///${PROFILE}/package.json`)
 
-// Bare ESM imports in this file would resolve from the workspace, not from the
-// profile — so third-party helpers are loaded through the profile's own
-// resolver, which is also the rule this install depends on.
+// Two resolver anchors. The PLUGIN must resolve by bare name from the PROFILE —
+// that is the install shape this file asserts, so its lookup keeps going
+// through the profile's resolver. Dev-time helpers like `yaml` resolve from
+// THIS REPO: the 0.2.0-rc.1 profile restructure trimmed the profile's top-level
+// node_modules to the launcher's own toolchain, so the profile can no longer be
+// borrowed for third-party helpers.
+const profileRequire = createRequire(`file:///${PROFILE}/package.json`)
+const require = createRequire(import.meta.url)
+
 const YAML = require('yaml')
 
 let failures = 0
@@ -32,7 +37,7 @@ const check = (label, ok, detail) => {
 /* 1. resolvable from the profile by bare name (the loader resolves the row's `name`) */
 let manifest = null
 try {
-  manifest = require.resolve(`${TARGET}/package.json`)
+  manifest = profileRequire.resolve(`${TARGET}/package.json`)
 } catch (error) {
   check(`resolve ${TARGET} from the profile`, false, error.code ?? error.message)
 }
