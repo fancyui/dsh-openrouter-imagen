@@ -1,8 +1,8 @@
 /**
- * Boot smoke test for the dsh 0.1.7 contract.
+ * Boot smoke test for the dsh host contract (verified against 0.2.0-rc.1).
  *
  * Loads the real host half (and the skill half it mounts), runs `apply` against
- * a stub Context that mirrors the 0.1.7 service shapes, and asserts the calls
+ * a stub Context that mirrors the service shapes, and asserts the calls
  * the plugin makes are the ones the runtime actually exposes:
  *
  *   - `ctx.settings.register` must never be called (it no longer exists);
@@ -14,7 +14,10 @@
  *   - the bundled skill must be listed and resolved by the REAL
  *     `SkillRegistry` (a hand-rolled stand-in can drift from the validator the
  *     runtime actually runs), with its body arriving frontmatter-free and
- *     organized style-family-first.
+ *     organized style-family-first;
+ *   - every bare `@deepseek-ai/*` import in `lib/` must be named in this
+ *     package's `peerDependencies` (or `dependencies`), because a linked-root
+ *     plugin only reaches the app's own copies through those keys.
  */
 import { readFileSync } from 'node:fs'
 import { Readable } from 'node:stream'
@@ -336,6 +339,44 @@ check(
   'GET /config reports the model palette to the browser',
   JSON.stringify(paletteView.config?.models) === JSON.stringify(['x/model', 'y/model']),
   JSON.stringify(paletteView.config?.models),
+)
+
+/* ---- the linked-root import contract ---- */
+
+// In-app, this package is a LINKED ROOT (the profile's node_modules holds a
+// junction to the working copy). The host resolver intercepts a bare
+// `@deepseek-ai/*` request coming from lib/ and serves the app's own copy, but
+// ONLY when some ancestor manifest's `peerDependencies` names that package
+// (`routeLinked` in dsh-app-boot's profile-resolution bootstrap); anything else
+// falls back to a native lookup inside this package's own node_modules — which
+// exists for local smoke but NOT in an app install that only ships its own
+// bundle. The 0.2.0-rc.1 upgrade was lost to exactly that shape: `undici`
+// resolved locally through a junction into the old app install and died
+// in-app with ERR_MODULE_NOT_FOUND after that app was upgraded away.
+const manifest = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+const routableNames = new Set([
+  ...Object.keys(manifest.dependencies ?? {}),
+  ...Object.keys(manifest.peerDependencies ?? {}),
+])
+const deepseekImports = new Map()
+for (const file of ['lib/index.js', 'lib/skills.js', 'lib/client.js']) {
+  const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')
+  for (const match of source.matchAll(/(?:from|require\(|import\()\s*['"]@deepseek-ai\/([^'"]+)['"]/gu)) {
+    // Interception is keyed by the bare package name; a subpath import still
+    // belongs to the same scope entry.
+    deepseekImports.set(`@deepseek-ai/${match[1].split('/')[0]}`, file)
+  }
+}
+const unroutable = [...deepseekImports.keys()].filter((name) => !routableNames.has(name))
+check(
+  'lib imports only routable @deepseek-ai packages',
+  unroutable.length === 0,
+  unroutable.length === 0 ? `${deepseekImports.size} names, all declared` : `undeclared: ${unroutable.join(', ')}`,
+)
+check(
+  'peerDependencies declares the runtime host services',
+  ['@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-skill', '@deepseek-ai/schemastery', '@deepseek-ai/cordis'].every((name) => routableNames.has(name)),
+  [...routableNames].filter((name) => name.startsWith('@deepseek-ai/')).join(', '),
 )
 
 console.log(`\n${failures.length === 0 ? 'ALL CHECKS PASSED' : `${failures.length} CHECK(S) FAILED`}`)

@@ -10,7 +10,7 @@
 
 ## 兼容性
 
-需要 **DSH ≥ 0.1.7-rc.1**。0.1.7 改了设置服务的契约,0.1.6 及更早的写法在 0.1.7 上会**启动即失败**:
+需要 **DSH ≥ 0.1.7-rc.1**,并已对照 **DSH Desktop 0.2.0-rc.1** 实测(cordis 4.0.4、schemastery 3.18.4、dsh-tools / dsh-skill / dsh-client-ui-* 0.2.0-rc.1)。0.1.7 改了设置服务的契约,0.1.6 及更早的写法在 0.1.7 上会**启动即失败**:
 
 | | ≤ 0.1.6 | ≥ 0.1.7(本插件 0.1.1 起) |
 | --- | --- | --- |
@@ -21,7 +21,17 @@
 
 `inject` 也不再需要 `'settings'`:设置服务是 `ctx.get('settings')` 惰性取的。升级 DSH 后如果插件被 runtime 静默禁用,日志里会出现 `Plugin dsh-openrouter-imagen@x is incompatible with dsh y: peerDependencies {...}` —— 那是 `peerDependencies` 的版本区间没覆盖新运行时,补区间(本包做法)或临时 `dsh plugin allow-version` 放行。
 
-**0.2.0 起,四条 `@deepseek-ai/dsh-*` peer 区间写成 `0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || ^0.1.5-rc.1`。** 前三个精确版本保住老运行时的支持,末尾的 `^` 区间把 `0.1.5-rc.1` 以上的所有 `0.1.x`(含 0.1.7 正式版、0.1.8……)一次覆盖。之前逐版本穷举,于是 DSH 一发正式版,整包就被判为不兼容而**静默禁用** —— 那正是 0.1.7-rc.1 这次踩到的坑。
+**本插件 0.2.0 起,四条 `@deepseek-ai/dsh-*` peer 区间写成 `0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || ^0.1.5-rc.1`;0.3.0 起追加 `|| 0.2.0-rc.1 || ^0.2.0`。** 前三个精确版本保住老运行时的支持,`^` 区间把对应大版本一次覆盖。之前逐版本穷举,于是 DSH 一发正式版,整包就被判为不兼容而**静默禁用** —— 那正是 0.1.7-rc.1 这次踩到的坑。
+
+### 0.3.0:DSH 0.2.0-rc.1 升级中发现的加载机制(linked-root 拦截)
+
+**DSH 升级后插件突然 404 的那次,根因不是 API 变了,而是 `undici` 解析断了。** 机制(dsh-app-boot 的 profile-resolution bootstrap,`routeLinked`):
+
+- profile `node_modules` 里指向外部目录的 junction(本包的手动挂载就是一条)会被登记为 **linked root**;
+- linked root 里的裸导入,宿主逐个祖先目录查 `package.json` 的 **`peerDependencies` 键名**:命中就把该包**拦截解析到宿主自己的副本**(`dsh-tools`/`dsh-skill`/`schemastery` 因此在 app 内永远用宿主那一份,本包 devDependencies 里的同名包只是本地冒烟用);
+- 键名没列的包(如 `undici`)走**普通解析** —— 在插件自己的 `node_modules` 里找。
+
+旧安装里那层普通解析靠的是 `node_modules/undici` → profiles store → **`D:\Program Files\DSH Desktop\resources\app\node_modules\undici`** 的 junction 链;app 升级到 C 盘、依赖搬进 1.18 GB 的 `app.asar` 后,这条链全断,`import ... from 'undici'` 直接 `ERR_MODULE_NOT_FOUND`,整个插件行挂载失败(路由 404、skill 不进目录)。**修复就是在本仓库跑一次 `npm install`**:peerDependencies 键名照旧负责拦截,`undici` 有了真实副本负责 native 解析。`npm run smoke` 已把「lib 的每个 `@deepseek-ai` 裸导入必须列在 peer/dependencies」变成断言,防止再踩。
 
 `npm run smoke` 用桩 Context 真跑一遍 Host 半边,断言上面几条契约(不会发网络请求,也不花钱)。
 
@@ -42,7 +52,8 @@
 ├── preflight.mjs           # Host 半边自检
 ├── preflight-client.mjs    # Client 半边自检
 ├── preflight-install.mjs   # 安装 / 挂载自检
-├── smoke-boot.mjs          # 0.1.7 契约冒烟(Host 半边真跑,桩 Context)
+├── smoke-boot.mjs          # 契约冒烟(0.2.0-rc.1 真包,Host 半边真跑,桩 Context)
+├── asar-inspect.mjs        # 读安装好的 app.asar:列文件 / 抽包,查宿主 API 漂移用
 └── preview-settings.mjs    # 设置页、输入条的离线排版预览
 ```
 
@@ -79,7 +90,7 @@ dsh plugin --profile desktop add dsh-openrouter-imagen@latest --registry=https:/
 ```powershell
 dsh plugin --profile desktop add github:fancyui/dsh-openrouter-imagen
 # 或本地 tarball / 目录
-dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-imagen-0.2.0.tgz
+dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-imagen-0.3.0.tgz
 ```
 
 ### 手动挂载(不走 CLI)
@@ -93,7 +104,7 @@ dsh plugin --profile desktop add X:\github\dsh-openrouter-imagen\dsh-openrouter-
    New-Item -ItemType Junction -Path $link -Target 'X:\github\dsh-openrouter-imagen'
    ```
 
-   > 用 junction 时,包体仍住在仓库里,因此**包内**需要一层最小依赖链接(`node_modules/@deepseek-ai/{schemastery,dsh-tools,dsh-skill}` 与 `node_modules/undici`),否则裸导入无法解析。若把包**复制**进 profile(真实目录),这一层就不需要。
+   > 用 junction 时,包体仍住在仓库里。裸导入分两路解析:包的 `peerDependencies` **键名**命中的 `@deepseek-ai/*` 由宿主拦截、用自己的副本(键名必须列全,见「兼容性」一节);其余(如 `undici`)按普通规则从包自身的 `node_modules` 找 —— 在仓库根目录跑一次 `npm install` 即可(devDependencies 精确对齐当前 DSH 版本,同时供 `npm run smoke` 使用)。若把包**复制**进 profile(真实目录),`@deepseek-ai/*` 的拦截同样生效,`undici` 仍需包内自带。
 
 2. 在 **`~/.dsh/profiles/desktop/cordis.patch.yml`** 里插入挂载行:
 
@@ -132,11 +143,11 @@ dsh plugin --profile desktop add dsh-openrouter-imagen
 
 | 类别 | 放在哪 | 谁提供 |
 | --- | --- | --- |
-| `@deepseek-ai/*`(cordis、dsh-tools、dsh-skill、schemastery、dsh-client-ui-*) | `peerDependencies` + `peerDependenciesMeta.optional` | DSH 本体(profile 里已 hoisted),插件**不能**自带第二份 —— 两个 cordis 实例会各建一套 Context |
+| `@deepseek-ai/*`(cordis、dsh-tools、dsh-skill、schemastery、dsh-client-ui-*) | `peerDependencies` + `peerDependenciesMeta.optional` | **运行时由宿主提供**:本包作为 linked root 被挂载时,peerDependencies 里列出名字的裸导入会被宿主拦截、解析到 app 自带副本 —— 插件**不能**自带第二份 cordis,两个 cordis 实例会各建一套 Context |
 | `react` | 同上 | 页面运行时(`window.__ModuleLoader__`),Client 半边只 `require('react')` |
-| `undici` | `dependencies` | 随包安装,是唯一真实的第三方运行时依赖 |
+| `undici` | `dependencies` | 随包安装,是唯一真实的第三方运行时依赖;宿主依赖图里没有它,拦截层不覆盖,必须能在包内解析到 |
 
-peer 之所以标 `optional: true`:公共 registry 上 `@deepseek-ai/dsh-client-ui-settings` 只有 `0.0.1-rc.*`,与 DSH Desktop 自带的 `0.1.5-rc.2` 对不上;不标 optional,包管理器会去装一份版本不符的副本(或直接报错),而这些包本来就由宿主提供。
+peer 标 `optional: true` 的含义:`@deepseek-ai/*` 本来就由宿主提供,包管理器不应因版本对不上而拒绝安装或塞进一份副本。本地开发则在 `devDependencies` 里**精确固定当前 DSH 版本**(0.3.0 起 = 0.2.0-rc.1 系),`npm install` 装出真实副本,冒烟测试对着和 app 完全一致的 API 跑。
 
 用 `npm pack --dry-run` 可以先看 tarball 里到底装了什么(`files` 白名单已限定为 `lib`、`skills`、`cordis.patch.yml`、`README.md`、`LICENSE`)。
 
@@ -405,7 +416,7 @@ skill 里那张表被明确标成「**几个示范(不是清单)**」,并附两�
 cd X:\github\dsh-openrouter-imagen
 git init -b main            # 只做一次
 git add .
-git commit -m "dsh-openrouter-imagen 0.2.0"
+git commit -m "dsh-openrouter-imagen 0.3.0"
 git remote add origin https://github.com/fancyui/dsh-openrouter-imagen.git
 git push -u origin main
 ```
@@ -423,6 +434,16 @@ npm publish
 
 - **Host 代码改动**(`lib/index.js`)需要重启 DSH —— 模块在启动时只导入一次。
 - **Client 代码改动**(`lib/client.js`)通常刷新页面即可。
+- **DSH 升级后必做(新会话回归)**:插件加载失败**不会**在界面上报错 —— 路由 404、skill 从技能目录里消失,只有日志里有栈。重启 DSH 后开一个**新会话**,确认技能目录里出现了 `openrouter-imagen`(旧会话里已加载过的 skill 会残留在上下文里,看不出回归);再用 `Invoke-WebRequest http://127.0.0.1:19387/openrouter-imagen/api/config` 探一下:401/JSON = 已挂载,404 = 没挂上。
+- **DSH 升级后对 API 漂移**,用 `asar-inspect.mjs` 对照宿主新包:
+
+  ```powershell
+  $asar = 'C:\Users\WR\AppData\Local\Programs\DeepSeek Harness\resources\app.asar'
+  node asar-inspect.mjs $asar find 'dsh/node_modules/@deepseek-ai/dsh-tools/'   # 列包内文件
+  node asar-inspect.mjs $asar get dsh/node_modules/@deepseek-ai/dsh-tools/package.json .\dsh-tools.json
+  ```
+
+  同时核对桌面版版本(`DeepSeek Harness.exe` 的 FileVersion)、更新 devDependencies 到一致版本、`npm install`、`npm run smoke`。
 - 离线自检(不需要启动 DSH):
 
   ```powershell
