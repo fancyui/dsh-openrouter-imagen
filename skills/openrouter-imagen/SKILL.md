@@ -145,13 +145,13 @@ dots, slight paper grain, high contrast, no gradients, no photographic detail.
 
 **永远不要**把「高级」「好看」这类词原样留在提示词里 —— 它们对模型没有约束力。
 
-> 这张表只管 **prompt 里怎么写**。用户提到「出几张」「要竖的」这类**参数**时，不要往 prompt 里塞 —— 那是**工具调用参数**的事，见下面的参数纪律。
+> 这张表只管 **prompt 里怎么写**。「出几张」是工具调用参数的事（见参数纪律）；「要竖的」「2K」这类**画幅与尺寸**正相反 —— 对话里提到了就**写进 prompt**，它们不走参数（见参数纪律）。
 
 ### 例 1 —— 摄影：产品主图
 
 > 用户：「帮我做张咖啡杯的产品图，要高级一点的」
 
-判断：**摄影** + 电商主图。补：材质、台面、布光、镜头。画幅不补 —— 那是 `aspect_ratio` 字段的事（见参数纪律）。
+判断：**摄影** + 电商主图。补：材质、台面、布光、镜头。画幅不补 —— 用户没提比例，prompt 不写比值，也不猜（见参数纪律）。
 
 ```
 E-commerce hero shot of a single white ceramic coffee cup, matte glaze, empty,
@@ -162,19 +162,19 @@ Neutral 5500K, low-key, generous negative space above the product. 100mm lens at
 f/8, camera at cup mid-height.
 ```
 
-调用只填 `prompt`。电商主图通常配 1:1 方画幅，但**你看不到面板当前值**：用户没点名就不要写、也不要猜，可以在回复里建议一句「面板画幅可设为 1:1」，由他决定。
+调用只填 `prompt`，参数一律留空 —— 画幅与尺寸不是参数（见参数纪律）。电商主图通常配 1:1 方画幅，但用户没提比例：prompt 不写比值、也不猜，可以在回复里建议一句「面板画幅可设为 1:1」，由他决定。
 
 ### 例 2 —— 线条图：图标
 
 > 用户：「帮我画个咖啡杯的图标，线稿那种，能放进 PPT」
 
-判断：**线条图 / 矢量**。**不写镜头、不写布光。**
+判断：**线条图 / 矢量**。「图标」这个名字自带方画幅 —— 写进 prompt（`square 1:1 format`），不走参数。**不写镜头、不写布光。**
 
 ```
 Minimal line-art icon of a coffee cup on a saucer with a small steam curl, drawn
 in a single uniform black stroke of even weight, round caps and joins, no fill, no
 shading, no gradient, no color. Centered with even margins and generous white
-space on a pure white background. Flat 2D front view.
+space on a pure white background. Flat 2D front view, square 1:1 format.
 ```
 
 ### 例 3 —— 卡通：贴纸
@@ -251,7 +251,7 @@ few essential contour lines. Flat 2D technical-illustration look.
 | --- | --- |
 | 主体与动作 | 是什么、什么状态、朝向、在什么环境里 |
 | 媒介与画风 | 哪一类、什么技法、什么载体 |
-| 构图与取景 | 取景、主体位置、留白。**画幅比值不写在这里** —— 比值走 `aspect_ratio` 字段，prompt 只用构图语言（`centered composition, generous margins`）表达取景 |
+| 构图与取景 | 取景、主体位置、留白。**对话里提到了画幅或尺寸，就把比值/数值写进 prompt**（`vertical 9:16 portrait format`）；没提到就只用构图语言（`centered composition, generous margins`），画幅交给面板 —— 见参数纪律 |
 | 色彩与影调 | 配色、明度、对比、饱和度上限 |
 | 细节与质感 | 细节层级，以及这种媒介特有的质感（描边 / 笔触 / 像素网格 / 材质） |
 | 画面内文字 | 逐字给出，注明大小写与拼写 |
@@ -260,7 +260,7 @@ few essential contour lines. Flat 2D technical-illustration look.
 
 ### 摄影的分镜配方
 
-只在媒介是摄影 / 写实时才用这张表 —— 其他媒介没有「焦段」这一栏。**表里的画幅是给用户的建议**：在回复里提一句让他把面板设成表里的值，**不要写进 prompt** —— 画幅由 `aspect_ratio` 字段决定。
+只在媒介是摄影 / 写实时才用这张表 —— 其他媒介没有「焦段」这一栏。**表里的画幅只是构图参考与给用户的建议**：用户没提比例时，prompt 不写比值（不发明画幅），在回复里提一句让他把面板设成表里的值；用户提了比例，才把比值写进 prompt（见参数纪律）。
 
 | 交付物 | 焦段 / 光圈 | 布光 | 机位与画幅 |
 | --- | --- | --- | --- |
@@ -315,7 +315,7 @@ few essential contour lines. Flat 2D technical-illustration look.
 **面板的值会自己进请求，不用你写。** 那些可选参数留空，就等于用面板的值。所以规则只有一条：
 
 > **默认动作：只填 `prompt`，其余全部留空。**
-> 用户**在这条消息里点名**了某个参数，才把那一个填上。
+> 用户**在这条消息里点名**了某个参数，才把那一个填上（`resolution` 与 `aspect_ratio` 例外：点了名也**不填** —— 画幅与尺寸写进 prompt，见下）。
 
 **「留空」是正确行为，不是遗漏。** 面板里的值由插件直接填进发往生图模型的请求 —— 你既不需要抄一遍，也不需要知道它是什么。
 
@@ -328,8 +328,8 @@ few essential contour lines. Flat 2D technical-illustration look.
 | `prompt` | **你** | `prompt` | 每次都填 |
 | `model` | 设置页「模型 ID」 | `model` | 用户点名模型时 |
 | `n` | 「图像」面板「数量」 | `count` | 用户点名张数时（1–10） |
-| `resolution` | 「图像」面板「分辨率」 | `resolution` | 用户点名分辨率时 |
-| `aspect_ratio` | 「图像」面板「宽高比」 | `aspect_ratio` | 用户点名画幅时 |
+| `resolution` | 「图像」面板「分辨率」 | `resolution` | **不填** —— 对话里提到的尺寸写进 prompt |
+| `aspect_ratio` | 「图像」面板「宽高比」 | `aspect_ratio` | **不填** —— 对话里提到的比例写进 prompt |
 | `quality` | 「图像」面板「画质」 | `quality` | 用户点名画质时 |
 | `background` | 「图像」面板「背景」 | `background` | 用户点名背景时 |
 | `seed` | 「图像」面板「种子」 | `seed` | 用户要复现 / 固定种子时（seed **总是提交**：面板留空时插件自己抽随机数） |
@@ -346,37 +346,37 @@ few essential contour lines. Flat 2D technical-illustration look.
 | 用户说 | 你填什么 |
 | --- | --- |
 | 「画只猫」 | 只填 `prompt` |
-| 「画只猫，要竖的」 | `prompt` + `aspect_ratio: "9:16"` |
+| 「画只猫，要竖的」 | 只填 `prompt` —— 把竖幅写进画面：`vertical 9:16 portrait format, tall framing`（画幅不走参数） |
 | 「出三张猫」 | `prompt` + `count: 3` |
 | 「出一张猫」 | 只填 `prompt` —— 「一张」就是默认，`count` 不用填 |
-| 「用 2K 画张猫，要透明底」 | `prompt` + `resolution: "2K"` + `background: "transparent"` |
+| 「用 2K 画张猫，要透明底」 | `prompt`（写进 `high-detail 2K render`）+ `background: "transparent"`（尺寸不走参数） |
 | 「用上次那个种子再来一张」 | `prompt` + `seed: <上次那个>` |
 | 「画只猫，全身照」 | 只填 `prompt` ——「全身照」是**取景**，写进 prompt |
 
-**点名只认最新一条用户消息。** 可选参数只在**这一次**调用生效，面板的值不会因为你上次填过而改变 —— 上一条消息说过「要竖的」，这一条只说「画只猫」，就只填 `prompt`。要延续，用户得再说一次，或者自己去调面板。
+**点名只认最新一条用户消息。** 可选参数只在**这一次**调用生效，面板的值不会因为你上次填过而改变；写进 prompt 的画幅与尺寸也跟着**当前请求**的语境 —— 上一条消息说过「要竖的」，这一条只说「画只猫」，prompt 就不写比值。要延续，用户得再说一次，或者自己去调面板。
 
-**唯一例外**：交付物的名字**定义里就带着**的属性 —— 「贴纸」不透明底就不叫贴纸（→ 填 `background: "transparent"`）、「图标」默认方画幅（→ 填 `aspect_ratio: "1:1"`）。判据：**去掉这个属性，这个词就不成立了**，才算「自带」；「海报用什么比例好看」是偏好，不算 —— 在回复里建议一句，让他定。
+**唯一例外**：交付物的名字**定义里就带着**的属性 —— 「贴纸」不透明底就不叫贴纸（→ 填 `background: "transparent"`）、「图标」默认方画幅（→ 把 `square 1:1 format` 写进 prompt）。判据：**去掉这个属性，这个词就不成立了**，才算「自带」；「海报用什么比例好看」是偏好，不算 —— 在回复里建议一句，让他定。
 
 面板里没有合适的画幅时（比如用户要超宽横幅），**在回复里提一句建议**，不要自己覆盖他的设置。
 
-### 面板参数的值不要写进 prompt
+### 画幅与尺寸进 prompt，其余面板值不进
 
-它们是 API 字段，由插件单独送达 —— 写进 prompt 是重复。而且**你看不到面板的当前值**（面板在输入框上方，不在你的上下文里），猜一个写进去只会和它打架。
+**对话里提到的画幅比例与图片尺寸，写进 prompt —— 这是它们进入请求的唯一通道。** 用户说「要竖的」「9:16」「方图」「用 2K」，就写进 prompt，**比值/数值和画面语言一起给**：
 
-- ❌ 不要写「2K」「16:9」「high quality」「seed 12345」「transparent background」这类**字段值**。
-- ✅ 只把**这条对话里提到过的**参数写进 prompt，而且用**画面语言**，不是复述数值。
-
-| 对话里提到 | 填工具参数 | prompt 里怎么呼应 |
+| 对话里提到 | prompt 里怎么写 | 工具参数 |
 | --- | --- | --- |
-| 「要 9:16」「竖构图」 | `aspect_ratio: "9:16"` | `vertical composition, tall framing` |
-| 「要横的」「16:9」 | `aspect_ratio: "16:9"` | `wide horizontal composition, horizon line` |
-| 「要方图」 | `aspect_ratio: "1:1"` | `centered composition, even margins` |
-| 「要透明底」 | `background: "transparent"` | **不要描述背景** —— 别写台面、地面、投影、环境 |
-| 分辨率 / 画质 / 数量 / 种子 / 格式 | 对应的工具参数 | **不要写进 prompt** —— 这些不是画面内容 |
+| 「要 9:16」「竖构图」 | `vertical 9:16 portrait format, tall framing` | `aspect_ratio` **不填** |
+| 「要横的」「16:9」 | `wide horizontal 16:9 composition, horizon line` | `aspect_ratio` **不填** |
+| 「要方图」 | `square 1:1 format, centered composition, even margins` | `aspect_ratio` **不填** |
+| 「用 2K」「4K 大图」「1024x1536」 | `high-detail 2K render, crisp fine texture`（像素尺寸照写） | `resolution` **不填** |
+| 「要透明底」 | **不要描述背景** —— 别写台面、地面、投影、环境 | `background: "transparent"` |
+| 数量 / 画质 / 种子 / 格式 | **不写进 prompt** —— 这些不是画面内容 | 点名的走参数，其余靠面板 |
 
-数值本身对生图模型没有意义：「9:16」不会让它排出竖幅画面，`vertical composition, tall framing` 才会。**只有会改变画面本身的参数（画幅、背景）值得在 prompt 里呼应，其余一律靠 API 字段。**
+**为什么不走参数：** `aspect_ratio` 与 `resolution` 是 API 字段，由**「图像」面板**决定 —— 你看不到面板的当前值（面板在输入框上方，不在你的上下文里），猜一个填进去只会和它打架。两个渠道各管一头：**字段由面板定，画面意图由 prompt 说**。不少图像模型会直接按 prompt 里的画幅与尺寸要求出图（面板选 `auto` 时，这就是唯一的画幅来源）；面板设了具体值时字段优先 —— 所以 prompt 照写，回复里**再提醒一句**「面板宽高比可设为 9:16」，两条路都不断。
 
-不知道面板画幅时怎么办：**按用户这句话的意图写构图**，不要猜他的面板。用户没提画幅，就写一个与主体相称的构图，让面板去决定最终裁切。
+**其余面板参数的值不要写进 prompt**：`seed` 总是提交（面板留空时插件自己抽），数量、画质、格式不是画面内容 —— 写进去是噪声，不是描述。
+
+用户没提画幅或尺寸时，prompt **不写比值、也不猜** —— 按这句话的意图写构图，让面板决定画幅。不知道面板画幅时也一样：按意图写构图，不要猜他的面板。
 
 ## 结果怎么用
 
@@ -399,6 +399,7 @@ few essential contour lines. Flat 2D technical-illustration look.
 | **要卡通却出了照片** | 提示词里混进了摄影器材词（焦段/光圈/柔光箱/色温）—— 删掉，改写成线条、上色、比例 |
 | **要线稿却还是照片** | 只写了「line art」但没禁止写实质感 —— 补 `no shading, no gradient, no photographic texture` |
 | 改图后主体变形了 | 提示词里多半复述了主体外观 —— 删掉那些描述，只留「保持参考图中的产品外观不变」 |
+| 「要竖的」却出了方图 | 画幅同时受面板控制：prompt 里的比值要写上（`vertical 9:16`），并在回复里提醒用户把面板宽高比也设成 9:16 |
 
 ## 边界
 

@@ -546,15 +546,24 @@ check(
   '',
 )
 check(
-  'the description keeps panel fields out of the prompt and says why',
-  tool.description.includes('面板参数的值也不要写进 prompt') && tool.description.includes('看不到面板当前的值'),
+  'the description keeps the non-visual panel fields out of the prompt and says why',
+  tool.description.includes('其余面板参数的值不要写进 prompt') && tool.description.includes('看不到面板当前的值'),
+  '',
+)
+check(
+  'the description routes conversation-named ratio and size into the prompt',
+  tool.description.includes('画幅比例或图片尺寸') && tool.description.includes('写进 prompt，不要传参数'),
   '',
 )
 // The override parameters stay available for the cases the user asks for by
 // name, but each one has to say "omit unless he asked" — that wording is the
 // contract that keeps the model from quietly re-deciding the panel's values.
+// `resolution` / `aspect_ratio` are the 0.3.0 exception: the panel owns those
+// fields, so their declarations must say "do not fill" instead — a ratio or
+// size named in the conversation is baked into the prompt, never passed here.
 const hostSource = readFileSync(join(ROOT, 'lib', 'index.js'), 'utf8')
-const OVERRIDES = ['model', 'count', 'resolution', 'aspect_ratio', 'quality', 'background', 'seed']
+const OVERRIDES = ['model', 'count', 'quality', 'background', 'seed']
+const PANEL_OWNED = ['resolution', 'aspect_ratio']
 const undisciplined = OVERRIDES.filter((key) => {
   const declaration = hostSource
     .split('\n')
@@ -567,10 +576,20 @@ check(
   undisciplined.length === 0,
   undisciplined.length === 0 ? `${OVERRIDES.length} parameters` : `missing on: ${undisciplined.join(', ')}`,
 )
+const misrouted = PANEL_OWNED.filter((key) => {
+  const declaration = hostSource
+    .split('\n')
+    .find((line) => line.trimStart().startsWith(`${key}: {`) && line.includes('description:'))
+  return !(declaration ?? '').includes('Do not fill')
+})
+check(
+  'the panel-owned fields tell the model not to fill them',
+  misrouted.length === 0,
+  misrouted.length === 0 ? `${PANEL_OWNED.length} parameters` : `missing on: ${misrouted.join(', ')}`,
+)
 check(
   '取景 alone is not a licence to pick a ratio',
-  tool.parameters?.aspect_ratio?.description?.includes('全身照') ||
-    hostSource.includes('主体取景（例如「全身照」）不算'),
+  hostSource.includes('「全身照」 is not a ratio') || (tool.parameters?.aspect_ratio?.description ?? '').includes('全身照'),
   '',
 )
 

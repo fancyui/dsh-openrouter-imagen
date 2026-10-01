@@ -135,14 +135,16 @@ check('route path is the client API root', main.state.routes[0]?.path === '/open
 check('route is a prefix route', main.state.routes[0]?.kind === 'prefix', main.state.routes[0]?.kind)
 
 // The panel lives in the composer, which the conversation model cannot read, so
-// the plugin must NOT pretend to know its values. What it can do is state the
-// rule: panel fields travel as API fields, never as prompt text.
-check('tool description keeps panel fields out of the prompt', tool.description.includes('面板参数的值也不要写进 prompt') && tool.description.includes('看不到面板当前的值'), '')
+// the plugin must NOT pretend to know its values. 0.3.0 rule: a ratio or size the
+// conversation names is baked into the prompt; the remaining panel fields travel
+// as API fields and never as prompt text.
+check('tool description keeps the non-visual panel fields out of the prompt', tool.description.includes('其余面板参数的值不要写进 prompt') && tool.description.includes('看不到面板当前的值'), '')
+check('tool description routes conversation-named ratio and size into the prompt', tool.description.includes('画幅比例或图片尺寸') && tool.description.includes('写进 prompt，不要传参数'), '')
 check('tool description states the default-fill rule', tool.description.includes('默认只填 `prompt`') && tool.description.includes('留空就是用面板的值'), '')
 check('tool description says leaving them blank is correct', tool.description.includes('留空是正确行为、不是遗漏'), '')
 check('tool description forbids deciding count for the user', tool.description.includes('不要自己判断「这次适合出几张」'), '')
 check('tool description scopes prompt text to conversation-named parameters', tool.description.includes('这条对话里提到过的'), '')
-check('tool description asks for visual language over raw values', tool.description.includes('vertical composition, tall framing'), '')
+check('tool description asks for the ratio plus visual language', tool.description.includes('vertical 9:16 portrait format, tall framing'), '')
 const missingFromTool = API_FIELDS.filter((field) => !tool.description.includes(`\`${field}\``))
 check('tool description names the same API fields', missingFromTool.length === 0, missingFromTool.join(', ') || `all ${API_FIELDS.length} present`)
 check('the plugin never claims to read the composer panel', !main.state.requested.includes('systemPrompt') && !tool.description.includes('面板的当前设置'), main.state.requested.join(', '))
@@ -202,7 +204,8 @@ check('body frames the skeleton as a checklist, not a template', body.includes('
 check('body shows non-photographic worked examples', body.includes('线条图：图标') && body.includes('卡通：贴纸'))
 check('body covers cross-style conversion from a reference photo', body.includes('跨画风迁移'))
 check('body says what to assume when no style is named', body.includes('用户没指定画风时'))
-check('body keeps panel fields out of the prompt', body.includes('面板参数的值不要写进 prompt') && body.includes('你看不到面板的当前值'))
+check('body keeps the non-visual panel fields out of the prompt', body.includes('其余面板参数的值不要写进 prompt') && body.includes('你看不到面板的当前值'))
+check('body routes conversation-named ratio and size into the prompt', body.includes('画幅比例与图片尺寸，写进 prompt') && body.includes('不走参数'))
 check('body states the default-fill rule up front', body.includes('默认只填 prompt') && body.includes('在这条消息里点名'))
 check('body says leaving the optional parameters blank is correct', body.includes('「留空」是正确行为，不是遗漏'))
 check('body distinguishes prompt from the optional arguments', body.includes('两样都是工具调用的参数'))
@@ -210,14 +213,18 @@ check('body defines what counts as naming a parameter', body.includes('什么叫
 // Regression guard: "count 要花钱，一张一张来" read as a licence for the model to
 // pick the image count. Owning the count is the user's job, not the model's.
 check('body forbids deciding count for the user', body.includes('出几张是用户的事') && !body.includes('一张一张来'), body.includes('一张一张来') ? 'still says 一张一张来' : '')
-check('body maps a conversation-named ratio to visual language', body.includes('vertical composition, tall framing'))
+check('body maps a conversation-named ratio into the prompt with visual language', body.includes('vertical 9:16 portrait format, tall framing'))
 check('body tells the model not to guess the panel aspect ratio', body.includes('不要猜他的面板'))
 
-// Clarity pass: the checklist used to demand 画幅 inside the prompt while 参数纪律
-// forbade raw ratio values, and every worked example ended in a bare "1:1" — the
-// two halves contradicted each other and the examples taught the wrong thing.
-const fences = body.split('```').filter((_, i) => i % 2 === 1).join('\n')
-check('worked examples keep raw ratio values out of the prompt', !/\b(?:1:1|3:2|4:3|3:4|4:5|2:3|9:16|16:9|2\.39:1)\b/.test(fences))
+// Clarity pass, reversed in 0.3.0: the checklist used to demand 画幅 inside the
+// prompt while 参数纪律 forbade raw ratio values — the two halves contradicted
+// each other. The rule is now: a ratio or size named in the conversation is baked
+// into the prompt (value + visual language together), and `aspect_ratio` /
+// `resolution` are never passed as tool arguments — the panel owns those fields.
+const fences = body.split('```').filter((_, i) => i % 2 === 1)
+check('a worked example bakes the deliverable-implied ratio in', /\b1:1\b/.test(fences.join('\n')))
+const ecommerceFence = fences.find((fence) => fence.includes('E-commerce hero shot')) ?? ''
+check('an example whose user named no ratio keeps the prompt ratio-free', ecommerceFence !== '' && !/\b(?:1:1|3:2|4:3|3:4|4:5|2:3|9:16|16:9|2\.39:1)\b/.test(ecommerceFence))
 check('body defines 槽位 and 轴 before using either word', body.includes('槽位 = 写什么') && body.includes('轴 = 用什么词填'))
 check('body scopes naming to the latest user message', body.includes('点名只认最新一条用户消息'))
 check('body gives a criterion for deliverable-implied parameters', body.includes('去掉这个属性，这个词就不成立'))
@@ -250,13 +257,14 @@ check('tool description frames the skeleton as a checklist', tool.description.in
 check('tool description handles an already-written prompt', tool.description.includes('已经有另一条写好、可直接使用的提示词时，不要再自己写一条'))
 check('tool description says to pass it through whole', tool.description.includes('整段填进 `prompt`') && tool.description.includes('不要精简'))
 check('tool description still demands the tool call, not a text answer', tool.description.includes('给出提示词不等于交付'))
-// The handoff must not read as a licence to edit the prompt: the ratio/background
-// values the template mentions stay in the text, and the fields win.
-check('tool description keeps field values out of the handoff text edit', tool.description.includes('画幅、背景这类值不因此变成你的'))
+// The handoff must not read as a licence to edit the prompt: the ratio/size values
+// the template mentions stay in the text — and, 0.3.0 rule, they are NOT passed as
+// tool arguments either; background still follows the naming rule.
+check('tool description keeps the handoff prompt intact, ratios included', tool.description.includes('随原文留在 prompt 里') && tool.description.includes('不要另填 `aspect_ratio` / `resolution`'), '')
 // A guard on the reverse direction: the always-loaded layer must not lose its
 // existing parameter discipline while gaining this one.
 check('tool description keeps the default-fill rule verbatim', tool.description.includes('**默认只填 `prompt`。**'))
-check('tool description keeps the panel-values rule verbatim', tool.description.includes('**面板参数的值也不要写进 prompt。**'))
+check('tool description keeps the panel-values rule verbatim', tool.description.includes('**其余面板参数的值不要写进 prompt**'))
 // The description is resident on every request, so its size is a standing cost.
 check('tool description stays within its context budget', tool.description.length <= 3000, `${tool.description.length} chars`)
 
